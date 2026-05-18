@@ -1,10 +1,10 @@
-name: recompute-reactions
+﻿name: recompute-reactions
 
 on:
   schedule:
-    # Nightly 03:30 UTC — incremental (only event_types with new occurrences in last 24h)
+    # Nightly 03:30 UTC â€” incremental (only event_types with new occurrences in last 24h)
     - cron: "30 3 * * 1-5"
-    # Saturday 05:00 UTC — full recompute of all event_types
+    # Saturday 05:00 UTC â€” full recompute of all event_types
     - cron: "0 5 * * 6"
   workflow_dispatch:
     inputs:
@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: "22"
           cache: npm
       - run: npm ci
       - name: Run recompute-reactions

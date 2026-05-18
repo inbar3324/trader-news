@@ -1,8 +1,8 @@
-name: capture-actuals
+﻿name: capture-actuals
 
 on:
   schedule:
-    # Every 15 min during US + EU sessions (07:00–22:00 UTC), Mon–Fri
+    # Every 15 min during US + EU sessions (07:00â€“22:00 UTC), Monâ€“Fri
     - cron: "5,20,35,50 7-21 * * 1-5"
   workflow_dispatch:
 
@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: "22"
           cache: npm
       - run: npm ci
       - run: npm --workspace workers run capture-actuals
