@@ -1,0 +1,23 @@
+name: backfill-bars
+
+on:
+  schedule:
+    # Saturday 04:00 UTC — captures the week's events before 30-day yfinance window expires
+    - cron: "0 4 * * 6"
+  workflow_dispatch:
+
+jobs:
+  backfill-bars:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm --workspace workers run backfill-bars
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

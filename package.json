@@ -1,0 +1,20 @@
+{
+  "name": "tradernews",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "workers"
+  ],
+  "scripts": {
+    "dev": "npm --workspace apps/web run dev",
+    "build": "npm --workspace apps/web run build",
+    "start": "npm --workspace apps/web run start",
+    "lint": "npm --workspace apps/web run lint",
+    "typecheck": "npm --workspace apps/web run typecheck && npm --workspace workers run typecheck",
+    "worker:pull-calendar": "npm --workspace workers run pull-calendar"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

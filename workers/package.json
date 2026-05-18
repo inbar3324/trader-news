@@ -1,0 +1,22 @@
+{
+  "name": "@tradernews/workers",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "pull-calendar": "tsx pull-calendar.ts",
+    "capture-actuals": "tsx capture-actuals.ts",
+    "backfill-bars": "tsx backfill-bars.ts",
+    "recompute-reactions": "tsx recompute-reactions.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.46.0",
+    "yahoo-finance2": "^2.11.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

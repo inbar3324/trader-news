@@ -1,0 +1,22 @@
+name: capture-actuals
+
+on:
+  schedule:
+    # Every 15 min during US + EU sessions (07:00–22:00 UTC), Mon–Fri
+    - cron: "5,20,35,50 7-21 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  capture-actuals:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm --workspace workers run capture-actuals
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
