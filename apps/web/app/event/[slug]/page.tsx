@@ -29,6 +29,7 @@ async function fetchEventData(slug: string): Promise<{
   reactions: HistoricalReaction[];
   symbols: Symbol[];
   volScore: number | null;
+  volRationale: string | null;
   watching: boolean;
 } | null> {
   const supabase = await getSupabaseServer();
@@ -42,6 +43,7 @@ async function fetchEventData(slug: string): Promise<{
       reactions: [],
       symbols: [],
       volScore: null,
+      volRationale: null,
       watching: false,
     };
   }
@@ -98,6 +100,21 @@ async function fetchEventData(slug: string): Promise<{
     reactions[0]?.vol_score ??
     null;
 
+  // Vol-score rationale (E.3) — per event_type, written by recompute-reactions worker
+  let volRationale: string | null = null;
+  if (event.event_type_id) {
+    const { data: rationaleData } = await supabase
+      .from("ai_enrichments")
+      .select("payload")
+      .eq("event_type_id", event.event_type_id)
+      .eq("kind", "vol_score_rationale")
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    volRationale = (rationaleData?.payload as { rationale?: string } | null)?.rationale ?? null;
+  }
+
   // Check if current user is watching this event_type
   const { data: { user } } = await supabase.auth.getUser();
   let watching = false;
@@ -111,7 +128,7 @@ async function fetchEventData(slug: string): Promise<{
     watching = !!wl;
   }
 
-  return { event, reactions, symbols, volScore, watching };
+  return { event, reactions, symbols, volScore, volRationale, watching };
 }
 
 export default async function EventDetailPage({ params }: { params: Params }) {
@@ -119,7 +136,7 @@ export default async function EventDetailPage({ params }: { params: Params }) {
   const data = await fetchEventData(slug);
   if (!data) notFound();
 
-  const { event, reactions, symbols, volScore, watching } = data;
+  const { event, reactions, symbols, volScore, volRationale, watching } = data;
 
   return (
     <div className="mx-auto max-w-[1100px] px-4 py-6">
@@ -149,8 +166,8 @@ export default async function EventDetailPage({ params }: { params: Params }) {
         </div>
 
         {volScore != null ? (
-          <div className="w-[180px] shrink-0">
-            <VolScoreGauge score={volScore} />
+          <div className="w-[240px] shrink-0">
+            <VolScoreGauge score={volScore} rationale={volRationale} />
           </div>
         ) : (
           <div className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-right">

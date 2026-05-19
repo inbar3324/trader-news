@@ -8,6 +8,7 @@ export async function getCachedEnrichment(
   eventId: string | null,
   kind: string,
   promptText: string,
+  eventTypeId: string | null = null,
 ): Promise<{ payload: unknown } | null> {
   const hash = promptHash(promptText);
 
@@ -20,6 +21,8 @@ export async function getCachedEnrichment(
 
   if (eventId) {
     query = query.eq('event_id', eventId);
+  } else if (eventTypeId) {
+    query = query.eq('event_type_id', eventTypeId);
   } else {
     return null;
   }
