@@ -9,6 +9,7 @@
     "backfill-bars": "tsx backfill-bars.ts",
     "recompute-reactions": "tsx recompute-reactions.ts",
     "enrich-upcoming": "tsx enrich-upcoming.ts",
+    "match-events": "tsx match-events.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -2,49 +2,9 @@
 // Run: npm run worker:pull-calendar
 // Scheduled via .github/workflows/pull-calendar.yml
 
-import { fetchFairEconomyWeek, normalize, type NormalizedEvent } from "./lib/faireconomy.js";
+import { fetchFairEconomyWeek, normalize } from "./lib/faireconomy.js";
 import { getServiceClient } from "./lib/supabase.js";
-
-interface EventTypeRow {
-  id: string;
-  slug: string;
-  display_name: string;
-  currency: string;
-}
-
-// Match a FairEconomy event title to an event_type row using simple heuristics.
-// Returns null if no confident match.
-function matchEventType(
-  ev: NormalizedEvent,
-  types: EventTypeRow[],
-): EventTypeRow | null {
-  const t = ev.title.toLowerCase();
-  const ccy = ev.currency;
-
-  const candidates = types.filter((x) => x.currency === ccy);
-  // exact-ish display_name comparison first
-  let best: EventTypeRow | null = null;
-  let bestScore = 0;
-  for (const c of candidates) {
-    const name = c.display_name.toLowerCase();
-    let score = 0;
-    if (t === name) score = 100;
-    else if (t.includes(name) || name.includes(t)) score = 80;
-    else {
-      // token overlap
-      const tt = new Set(t.split(/[\s/]+/).filter(Boolean));
-      const nt = new Set(name.split(/[\s/]+/).filter(Boolean));
-      let overlap = 0;
-      for (const w of tt) if (nt.has(w)) overlap++;
-      score = (overlap / Math.max(nt.size, 1)) * 70;
-    }
-    if (score > bestScore) {
-      bestScore = score;
-      best = c;
-    }
-  }
-  return bestScore >= 60 ? best : null;
-}
+import { matchEventType, type EventTypeRow } from "./lib/event-type-matcher.js";
 
 async function main() {
   console.log("[pull-calendar] fetching FairEconomy feed…");
@@ -68,7 +28,7 @@ async function main() {
 
   // Build upsert rows
   const rows = events.map((e) => {
-    const type = matchEventType(e, types);
+    const type = matchEventType(e.title, e.currency, types);
     return {
       event_type_id: type?.id ?? null,
       title: e.title,
