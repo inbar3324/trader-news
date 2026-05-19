@@ -21,10 +21,12 @@ async function main() {
     .lte('release_at', in48h.toISOString())
     .order('release_at', { ascending: true });
 
+  console.log(`Window: ${now.toISOString()} → ${in48h.toISOString()}`);
   if (error) {
-    console.error('Failed to fetch events:', error.message);
+    console.error('Query error:', JSON.stringify(error));
     process.exit(1);
   }
+  console.log(`Query returned: ${events?.length ?? 'null'} events`);
 
   if (!events?.length) {
     console.log('No upcoming high/medium events in next 48h — done.');
