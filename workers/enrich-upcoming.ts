@@ -7,7 +7,7 @@ async function main() {
   const supabase = getServiceClient();
 
   const now = new Date();
-  const in48h = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+  const in48h = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // temp: 7d for testing
 
   // High + medium impact events in the next 48h, closest first
   const { data: events, error } = await supabase
