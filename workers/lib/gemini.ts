@@ -65,7 +65,10 @@ export async function callGemini({
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const modelParams: any = { model: GEMINI_MODEL };
-  if (schema) {
+
+  // Gemini API limitation: cannot use responseSchema + Google Search simultaneously.
+  // For search calls, request JSON via the prompt text instead and parse manually.
+  if (schema && !useSearch) {
     modelParams.generationConfig = {
       responseMimeType: 'application/json',
       responseSchema: schema,
@@ -73,6 +76,11 @@ export async function callGemini({
   }
   if (useSearch) {
     modelParams.tools = [{ googleSearch: {} }];
+  }
+
+  // When schema is needed but search is also active, instruct via prompt
+  if (schema && useSearch) {
+    prompt = prompt + '\n\nIMPORTANT: Respond with valid JSON only — no markdown, no code blocks, no extra text.';
   }
 
   const model = genai.getGenerativeModel(modelParams);
@@ -109,5 +117,12 @@ export async function callGemini({
     p_tokens_out: tokens_out,
   });
 
-  return { text, json: schema ? JSON.parse(text) : undefined, tokens_in, tokens_out };
+  let json: unknown;
+  if (schema) {
+    // Strip markdown code fences Gemini sometimes adds when schema is prompted via text
+    const cleaned = text.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim();
+    json = JSON.parse(cleaned);
+  }
+
+  return { text, json, tokens_in, tokens_out };
 }

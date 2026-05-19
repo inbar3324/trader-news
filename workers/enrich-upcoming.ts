@@ -7,7 +7,7 @@ async function main() {
   const supabase = getServiceClient();
 
   const now = new Date();
-  const in48h = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // temp: 7d for testing
+  const in48h = new Date(now.getTime() + 48 * 60 * 60 * 1000);
 
   // High + medium impact events in the next 48h, closest first
   const { data: events, error } = await supabase
@@ -21,12 +21,10 @@ async function main() {
     .lte('release_at', in48h.toISOString())
     .order('release_at', { ascending: true });
 
-  console.log(`Window: ${now.toISOString()} → ${in48h.toISOString()}`);
   if (error) {
-    console.error('Query error:', JSON.stringify(error));
+    console.error('Failed to fetch events:', error.message);
     process.exit(1);
   }
-  console.log(`Query returned: ${events?.length ?? 'null'} events`);
 
   if (!events?.length) {
     console.log('No upcoming high/medium events in next 48h — done.');
