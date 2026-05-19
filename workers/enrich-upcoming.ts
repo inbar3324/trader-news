@@ -14,7 +14,6 @@ async function main() {
     .from('events')
     .select(`
       id, title, release_at, impact, currency,
-      event_types!inner( slug ),
       event_occurrences( forecast, previous )
     `)
     .in('impact', ['high', 'medium'])
@@ -36,8 +35,6 @@ async function main() {
   let enriched = 0, cached = 0, failed = 0;
 
   for (const ev of events) {
-    const et = Array.isArray(ev.event_types) ? ev.event_types[0] : ev.event_types;
-    const slug = (et as { slug: string })?.slug ?? '';
     const occ = Array.isArray(ev.event_occurrences) ? ev.event_occurrences[0] : ev.event_occurrences;
     const forecast = (occ as { forecast: number | null } | null)?.forecast ?? null;
     const previous = (occ as { previous: number | null } | null)?.previous ?? null;
@@ -47,7 +44,7 @@ async function main() {
       currency: ev.currency,
       release_at: ev.release_at,
       impact: ev.impact,
-      slug,
+      slug: ev.title, // use title for speech detection when slug unavailable
       forecast,
       previous,
     });
@@ -61,7 +58,7 @@ async function main() {
       }
 
       console.log(`  [enrich] ${ev.title}`);
-      const isSpeech = isSpeechEvent(slug);
+      const isSpeech = isSpeechEvent(ev.title);
 
       const { json, tokens_in, tokens_out } = await callGemini({
         role: 'writer',

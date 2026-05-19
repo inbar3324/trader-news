@@ -11,13 +11,15 @@ export interface ExplainerOutput {
 
 const TEMPLATE_VERSION = 'v1';
 
-const SPEECH_PATTERNS = [
-  'press-conference', '-speech', '-speaks', '-remarks',
-  'powell', 'lagarde', 'bailey', 'ueda', 'trump',
+const SPEECH_WORDS = [
+  'speech', 'speaks', 'remarks', 'press conference', 'presser',
+  'testimony', 'statement', 'powell', 'lagarde', 'bailey', 'ueda',
+  'trump', 'fed chair', 'governor', 'minutes',
 ];
 
-export function isSpeechEvent(slug: string): boolean {
-  return SPEECH_PATTERNS.some(p => slug.includes(p));
+export function isSpeechEvent(slugOrTitle: string): boolean {
+  const lower = slugOrTitle.toLowerCase();
+  return SPEECH_WORDS.some(w => lower.includes(w));
 }
 
 export const EXPLAINER_SCHEMA = {
