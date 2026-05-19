@@ -1,0 +1,24 @@
+name: enrich-upcoming
+
+on:
+  schedule:
+    # Every hour at :05 — enriches next-48h high/medium events with Gemini E.1 explainer
+    - cron: "5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  enrich-upcoming:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm --workspace workers run enrich-upcoming
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GEMINI_KEY_WRITER: ${{ secrets.GEMINI_KEY_WRITER }}

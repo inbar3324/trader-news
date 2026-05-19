@@ -6,6 +6,7 @@ import type { HistoricalReaction, Symbol } from "@/lib/types";
 import { ReactionStats } from "./_components/ReactionStats";
 import { VolScoreGauge } from "./_components/VolScoreGauge";
 import { WatchButton } from "./_components/WatchButton";
+import { AIExplainer } from "./_components/AIExplainer";
 
 export const revalidate = 300;
 
@@ -167,14 +168,13 @@ export default async function EventDetailPage({ params }: { params: Params }) {
         <StatCard label="Previous" value={formatNumber(event.previous)} muted />
       </div>
 
-      {/* AI Explainer placeholder */}
+      {/* AI Explainer */}
       <section className="mt-6">
         <h2 className="text-[11px] uppercase tracking-wider text-[var(--color-text-mute)]">
           AI explainer
         </h2>
-        <div className="mt-2 rounded border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-mute)]">
-          Coming in v1 — Gemini-powered summary, agenda/topics, consensus expectation, bull/bear
-          scenarios, impacted symbols.
+        <div className="mt-2">
+          <AIExplainer eventId={event.id} />
         </div>
       </section>
 

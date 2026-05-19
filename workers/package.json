@@ -8,9 +8,11 @@
     "capture-actuals": "tsx capture-actuals.ts",
     "backfill-bars": "tsx backfill-bars.ts",
     "recompute-reactions": "tsx recompute-reactions.ts",
+    "enrich-upcoming": "tsx enrich-upcoming.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.0",
     "@supabase/supabase-js": "^2.46.0",
     "yahoo-finance2": "^2.11.3"
   },
