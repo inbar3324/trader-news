@@ -51,6 +51,16 @@ export interface HistoricalReaction {
   avg_abs_pts_5m:  number | null; median_abs_pts_5m:  number | null; max_abs_pts_5m:  number | null;
   avg_abs_pts_15m: number | null; median_abs_pts_15m: number | null; max_abs_pts_15m: number | null;
   avg_abs_pts_60m: number | null; median_abs_pts_60m: number | null; max_abs_pts_60m: number | null;
+  avg_vol_ratio_5m:  number | null; max_vol_ratio_5m:  number | null;
+  avg_vol_ratio_15m: number | null; max_vol_ratio_15m: number | null;
+  avg_vol_ratio_60m: number | null; max_vol_ratio_60m: number | null;
+  avg_intraday_range_pct:    number | null;
+  median_intraday_range_pct: number | null;
+  max_intraday_range_pct:    number | null;
+  avg_intraday_vol_ratio: number | null;
+  max_intraday_vol_ratio: number | null;
+  open_vol_score: number | null;
+  one_min_score: number | null;
   directional_bias_up_pct: number | null;
   reversal_rate_15m: number | null;
   vol_score: number | null;

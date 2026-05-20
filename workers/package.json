@@ -7,9 +7,11 @@
     "pull-calendar": "tsx pull-calendar.ts",
     "capture-actuals": "tsx capture-actuals.ts",
     "backfill-bars": "tsx backfill-bars.ts",
+    "backfill-events": "tsx backfill-events.ts",
     "recompute-reactions": "tsx recompute-reactions.ts",
     "enrich-upcoming": "tsx enrich-upcoming.ts",
     "match-events": "tsx match-events.ts",
+    "analyze-vol-score": "tsx analyze-vol-score.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -4,9 +4,10 @@ import { MOCK_EVENTS } from "@/lib/mock-events";
 import { formatDayHeaderNY, formatNumber, formatTimeNY, impactDotColor } from "@/lib/formatters";
 import type { HistoricalReaction, Symbol } from "@/lib/types";
 import { ReactionStats } from "./_components/ReactionStats";
-import { VolScoreGauge } from "./_components/VolScoreGauge";
+import { GaugePanel } from "./_components/GaugePanel";
 import { WatchButton } from "./_components/WatchButton";
 import { AIExplainer } from "./_components/AIExplainer";
+import { MorningContext } from "./_components/MorningContext";
 
 export const revalidate = 300;
 
@@ -28,8 +29,8 @@ async function fetchEventData(slug: string): Promise<{
   event: EventData;
   reactions: HistoricalReaction[];
   symbols: Symbol[];
-  volScore: number | null;
   volRationale: string | null;
+  referenceReaction: HistoricalReaction | null;
   watching: boolean;
 } | null> {
   const supabase = await getSupabaseServer();
@@ -42,8 +43,8 @@ async function fetchEventData(slug: string): Promise<{
       event: { ...mock, event_type_id: mock.event_type_id ?? "" },
       reactions: [],
       symbols: [],
-      volScore: null,
       volRationale: null,
+      referenceReaction: null,
       watching: false,
     };
   }
@@ -94,10 +95,12 @@ async function fetchEventData(slug: string): Promise<{
 
   const symbols = (symData ?? []) as Symbol[];
 
-  // vol_score — use the SPY reaction if available, else first available
-  const volScore =
-    reactions.find((r) => r.symbol === "SPY")?.vol_score ??
-    reactions[0]?.vol_score ??
+  // Reference reaction for MorningContext: prefer SPY, then ES, then first available.
+  // The Gauge panel picks its own symbol internally based on user selection.
+  const referenceReaction =
+    reactions.find((r) => r.symbol === "SPY") ??
+    reactions.find((r) => r.symbol === "ES") ??
+    reactions[0] ??
     null;
 
   // Vol-score rationale (E.3) — per event_type, written by recompute-reactions worker
@@ -128,7 +131,7 @@ async function fetchEventData(slug: string): Promise<{
     watching = !!wl;
   }
 
-  return { event, reactions, symbols, volScore, volRationale, watching };
+  return { event, reactions, symbols, volRationale, referenceReaction, watching };
 }
 
 export default async function EventDetailPage({ params }: { params: Params }) {
@@ -136,7 +139,7 @@ export default async function EventDetailPage({ params }: { params: Params }) {
   const data = await fetchEventData(slug);
   if (!data) notFound();
 
-  const { event, reactions, symbols, volScore, volRationale, watching } = data;
+  const { event, reactions, symbols, volRationale, referenceReaction, watching } = data;
 
   return (
     <div className="mx-auto max-w-[1100px] px-4 py-6">
@@ -165,17 +168,13 @@ export default async function EventDetailPage({ params }: { params: Params }) {
           </div>
         </div>
 
-        {volScore != null ? (
-          <div className="w-[240px] shrink-0">
-            <VolScoreGauge score={volScore} rationale={volRationale} />
-          </div>
-        ) : (
-          <div className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-right">
-            <div className="text-[10px] uppercase tracking-wider text-[var(--color-text-mute)]">Vol score</div>
-            <div className="text-2xl font-semibold text-[var(--color-text-dim)]">—/10</div>
-            <div className="text-[10px] text-[var(--color-text-mute)]">need data</div>
-          </div>
-        )}
+        <div className="w-[540px] shrink-0">
+          <GaugePanel
+            reactions={reactions}
+            symbols={symbols}
+            rationale={volRationale}
+          />
+        </div>
       </header>
 
       {/* Actual / Forecast / Previous */}
@@ -194,6 +193,9 @@ export default async function EventDetailPage({ params }: { params: Params }) {
           <AIExplainer eventId={event.id} />
         </div>
       </section>
+
+      {/* Morning context — 9:30–11 ET interpretation depends on release time */}
+      <MorningContext releaseAt={event.release_at} reaction={referenceReaction} />
 
       {/* Historical reaction */}
       <section className="mt-6">

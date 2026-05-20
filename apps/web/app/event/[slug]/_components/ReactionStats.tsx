@@ -10,6 +10,7 @@ interface Props {
 
 type Window = "1m" | "5m" | "15m" | "60m";
 const WINDOWS: Window[] = ["1m", "5m", "15m", "60m"];
+type VolWindow = "5m" | "15m" | "60m";
 
 function fmtPct(v: number | null): string {
   if (v == null) return "—";
@@ -21,6 +22,17 @@ function fmtPts(v: number | null, unit: UnitLabel): string {
   if (unit === "pips")   return `${v.toFixed(1)} pip`;
   if (unit === "points") return `${v.toFixed(2)} pts`;
   return `${v.toFixed(3)} pts`; // ETF: raw price diff
+}
+
+function fmtVolRatio(v: number | null): string {
+  if (v == null) return "—";
+  return `${v.toFixed(1)}×`;
+}
+
+function volRatioForWindow(r: HistoricalReaction, w: Window): number | null {
+  if (w === "1m") return null; // too noisy
+  const key = `avg_vol_ratio_${w as VolWindow}` as const;
+  return r[key];
 }
 
 function primaryLabel(unit: UnitLabel): string {
@@ -113,6 +125,9 @@ export function ReactionStats({ reactions, symbols }: Props) {
               <th className="py-2 px-2 text-left text-[var(--color-text-mute)]">
                 {secondaryLabel(active.sym.unit_label)} (avg)
               </th>
+              <th className="py-2 px-2 text-left text-[var(--color-text-mute)]">
+                Volume vs avg
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -129,6 +144,9 @@ export function ReactionStats({ reactions, symbols }: Props) {
                 </td>
                 <td className="py-2 px-2 text-[var(--color-text-dim)]">
                   {secondaryRow(active.r, active.sym, w)}
+                </td>
+                <td className="py-2 px-2 font-mono text-[var(--color-text-dim)]">
+                  {fmtVolRatio(volRatioForWindow(active.r, w))}
                 </td>
               </tr>
             ))}

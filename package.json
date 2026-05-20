@@ -12,7 +12,8 @@
     "start": "npm --workspace apps/web run start",
     "lint": "npm --workspace apps/web run lint",
     "typecheck": "npm --workspace apps/web run typecheck && npm --workspace workers run typecheck",
-    "worker:pull-calendar": "npm --workspace workers run pull-calendar"
+    "worker:pull-calendar": "npm --workspace workers run pull-calendar",
+    "worker:backfill-events": "npm --workspace workers run backfill-events"
   },
   "engines": {
     "node": ">=20.0.0"

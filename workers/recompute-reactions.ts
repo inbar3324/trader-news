@@ -9,9 +9,13 @@ import {
   computeOccurrenceReaction,
   aggregateReactions,
   computeVolScore,
+  computeOpenVolScore,
+  computeOneMinScore,
   type AggregatedReaction,
+  type SymbolBaseline,
 } from "./lib/reaction-engine.js";
 import type { PriceBar } from "./lib/prices.js";
+import { localToUtc } from "./lib/local-time.js";
 import { callGemini, QuotaSoftLimitError, QuotaHardLimitError } from "./lib/gemini.js";
 import { getCachedEnrichment, upsertEnrichment } from "./lib/enrichment-cache.js";
 import {
@@ -58,6 +62,84 @@ async function main() {
 
   console.log(`[recompute-reactions] ${eventTypes.length} event types × ${syms.length} symbols`);
 
+  // Per-symbol baselines: normal volume (for volume-ratio) and normal noise
+  // (typical_5m, typical_15m, typical_90m_range) — used to ground vol_score and
+  // open_vol_score in absolute terms instead of relative percentile rank.
+  // Sample up to 5000 recent bars per symbol.
+  const baselineVolBySymbol = new Map<string, number>();
+  const baselineNoiseBySymbol = new Map<string, SymbolBaseline>();
+  for (const sym of syms) {
+    const { data: rows } = await supabase
+      .from("price_bars_1m")
+      .select("ts, open, high, low, close, volume")
+      .eq("symbol", sym.ticker)
+      .order("ts", { ascending: true })
+      .limit(5000);
+    const bars = (rows ?? []) as Array<{
+      ts: string; open: number; high: number; low: number; close: number; volume: number;
+    }>;
+    if (bars.length < 100) {
+      baselineVolBySymbol.set(sym.ticker, 0);
+      baselineNoiseBySymbol.set(sym.ticker, { typical_1m: 0, typical_5m: 0, typical_15m: 0, typical_90m_range: 0 });
+      continue;
+    }
+
+    // Volume baseline
+    const vols = bars.map((b) => Number(b.volume)).filter((v) => v > 0);
+    const meanVol = vols.length > 0 ? vols.reduce((s, v) => s + v, 0) / vols.length : 0;
+    baselineVolBySymbol.set(sym.ticker, meanVol);
+
+    // Typical 5m & 15m absolute return (median across contiguous spans)
+    function medianAbsReturn(lookback: number): number {
+      const out: number[] = [];
+      for (let i = lookback; i < bars.length; i++) {
+        const a = bars[i - lookback].close;
+        const b = bars[i].close;
+        if (!a || a === 0) continue;
+        const dt = new Date(bars[i].ts).getTime() - new Date(bars[i - lookback].ts).getTime();
+        if (dt > (lookback + 2) * 60_000) continue; // skip across gaps
+        out.push(Math.abs((b - a) / a));
+      }
+      if (out.length === 0) return 0;
+      const sorted = out.sort((a, b) => a - b);
+      return sorted[Math.floor(sorted.length / 2)];
+    }
+
+    // Typical 90-min range (median (max_high - min_low)/close across rolling spans)
+    function median90mRange(): number {
+      const out: number[] = [];
+      const step = 30;
+      const span = 90;
+      for (let i = 0; i + span < bars.length; i += step) {
+        const slice = bars.slice(i, i + span);
+        const dt = new Date(slice[slice.length - 1].ts).getTime() - new Date(slice[0].ts).getTime();
+        if (dt > (span + 10) * 60_000) continue;
+        let hi = -Infinity, lo = Infinity;
+        for (const b of slice) { if (b.high > hi) hi = b.high; if (b.low < lo) lo = b.low; }
+        const ref = slice[0].close;
+        if (!ref || ref === 0) continue;
+        out.push((hi - lo) / ref);
+      }
+      if (out.length === 0) return 0;
+      const sorted = out.sort((a, b) => a - b);
+      return sorted[Math.floor(sorted.length / 2)];
+    }
+
+    baselineNoiseBySymbol.set(sym.ticker, {
+      typical_1m: medianAbsReturn(1),
+      typical_5m: medianAbsReturn(5),
+      typical_15m: medianAbsReturn(15),
+      typical_90m_range: median90mRange(),
+    });
+  }
+  console.log(`[recompute-reactions] baselines computed for ${baselineNoiseBySymbol.size} symbols`);
+  for (const sym of syms) {
+    const n = baselineNoiseBySymbol.get(sym.ticker)!;
+    console.log(
+      `  ${sym.ticker.padEnd(8)} typ_1m=${(n.typical_1m * 100).toFixed(4)}%  typ_5m=${(n.typical_5m * 100).toFixed(4)}%  typ_15m=${(n.typical_15m * 100).toFixed(4)}%  typ_90m=${(n.typical_90m_range * 100).toFixed(3)}%`,
+    );
+  }
+
   // Results accumulator — we need all aggregations to compute vol_score percentile ranks
   const results: Array<{
     event_type_id: string;
@@ -83,8 +165,22 @@ async function main() {
 
       for (const ev of pastEvents) {
         const releaseAt = new Date(ev.release_at);
-        const windowStart = new Date(releaseAt.getTime() - 130 * 60_000).toISOString();
-        const windowEnd   = new Date(releaseAt.getTime() +  70 * 60_000).toISOString();
+        // Bars window: union of release ±2h AND 9:30–11 ET on event's NY day.
+        // Same logic as backfill-bars — ensures intraday_range_pct uses the full 90-min window.
+        const releaseStart = releaseAt.getTime() - 130 * 60_000;
+        const releaseEnd   = releaseAt.getTime() +  70 * 60_000;
+        const nyFmt = new Intl.DateTimeFormat("en-US", {
+          timeZone: "America/New_York",
+          year: "numeric", month: "numeric", day: "numeric",
+        });
+        const nyParts = nyFmt.formatToParts(releaseAt);
+        const nyYear  = parseInt(nyParts.find((p) => p.type === "year")!.value, 10);
+        const nyMonth = parseInt(nyParts.find((p) => p.type === "month")!.value, 10);
+        const nyDay   = parseInt(nyParts.find((p) => p.type === "day")!.value, 10);
+        const t930  = localToUtc(nyYear, nyMonth, nyDay,  9, 30, "America/New_York").getTime();
+        const t1100 = localToUtc(nyYear, nyMonth, nyDay, 11,  0, "America/New_York").getTime();
+        const windowStart = new Date(Math.min(releaseStart, t930  - 5 * 60_000)).toISOString();
+        const windowEnd   = new Date(Math.max(releaseEnd,   t1100 + 5 * 60_000)).toISOString();
 
         const { data: barData, error: barErr } = await supabase
           .from("price_bars_1m")
@@ -96,7 +192,8 @@ async function main() {
         if (barErr || !barData || barData.length < 5) continue;
 
         const bars = barData as PriceBar[];
-        const occ = computeOccurrenceReaction(bars, releaseAt, sym.pip_size);
+        const baseline = baselineVolBySymbol.get(sym.ticker) ?? 0;
+        const occ = computeOccurrenceReaction(bars, releaseAt, sym.pip_size, baseline);
         if (occ.pct_5m !== null) occurrenceReactions.push(occ);
       }
 
@@ -109,10 +206,9 @@ async function main() {
 
   console.log(`[recompute-reactions] computed ${results.length} (event_type, symbol) pairs`);
 
-  // vol_score needs all aggregations for percentile ranks
-  const allReactions = results.map((r) => r.reaction);
-
-  const upsertRows = results.map(({ event_type_id, symbol, reaction }) => ({
+  const upsertRows = results.map(({ event_type_id, symbol, reaction }) => {
+    const baseline = baselineNoiseBySymbol.get(symbol) ?? { typical_1m: 0, typical_5m: 0, typical_15m: 0, typical_90m_range: 0 };
+    return {
     event_type_id,
     symbol,
     sample_size: reaction.sample_size,
@@ -124,11 +220,22 @@ async function main() {
     avg_abs_pts_5m:   reaction.avg_abs_pts_5m,   median_abs_pts_5m:   reaction.median_abs_pts_5m,   max_abs_pts_5m:   reaction.max_abs_pts_5m,
     avg_abs_pts_15m:  reaction.avg_abs_pts_15m,  median_abs_pts_15m:  reaction.median_abs_pts_15m,  max_abs_pts_15m:  reaction.max_abs_pts_15m,
     avg_abs_pts_60m:  reaction.avg_abs_pts_60m,  median_abs_pts_60m:  reaction.median_abs_pts_60m,  max_abs_pts_60m:  reaction.max_abs_pts_60m,
+    avg_vol_ratio_5m:  reaction.avg_vol_ratio_5m,  max_vol_ratio_5m:  reaction.max_vol_ratio_5m,
+    avg_vol_ratio_15m: reaction.avg_vol_ratio_15m, max_vol_ratio_15m: reaction.max_vol_ratio_15m,
+    avg_vol_ratio_60m: reaction.avg_vol_ratio_60m, max_vol_ratio_60m: reaction.max_vol_ratio_60m,
+    avg_intraday_range_pct:    reaction.avg_intraday_range_pct,
+    median_intraday_range_pct: reaction.median_intraday_range_pct,
+    max_intraday_range_pct:    reaction.max_intraday_range_pct,
+    avg_intraday_vol_ratio: reaction.avg_intraday_vol_ratio,
+    max_intraday_vol_ratio: reaction.max_intraday_vol_ratio,
     directional_bias_up_pct: reaction.directional_bias_up_pct,
     reversal_rate_15m: reaction.reversal_rate_15m,
-    vol_score: computeVolScore(reaction, allReactions),
+    vol_score: computeVolScore(reaction, baseline),
+    open_vol_score: computeOpenVolScore(reaction, baseline),
+    one_min_score: computeOneMinScore(reaction, baseline),
     last_computed_at: new Date().toISOString(),
-  }));
+  };
+  });
 
   if (upsertRows.length === 0) {
     console.log("[recompute-reactions] nothing to upsert — run backfill-bars first");

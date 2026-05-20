@@ -6,7 +6,8 @@
 // Manual: npm --workspace workers run backfill-bars -- --event=us-cpi-yoy
 
 import { getServiceClient } from "./lib/supabase.js";
-import { fetchBarsAroundEvent, sleep } from "./lib/prices.js";
+import { fetch1mBars, sleep } from "./lib/prices.js";
+import { localToUtc } from "./lib/local-time.js";
 
 interface SymbolRow {
   ticker: string;
@@ -61,25 +62,41 @@ async function main() {
   outer: for (const ev of evs) {
     const releaseAt = new Date(ev.release_at);
 
-    for (const sym of syms) {
-      // Check if we already have bars for this window
-      const windowStart = new Date(releaseAt.getTime() - 120 * 60_000).toISOString();
-      const windowEnd   = new Date(releaseAt.getTime() + 120 * 60_000).toISOString();
+    // Determine fetch window: union of (release ±2h) AND (9:30–11 ET on event's NY day).
+    // This ensures the day-anchored 9:30-11 ET window is always fully covered, regardless
+    // of release time, for accurate intraday_range_pct computation.
+    const releaseStart = releaseAt.getTime() - 120 * 60_000;
+    const releaseEnd   = releaseAt.getTime() + 120 * 60_000;
+    const nyFmt = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      year: "numeric", month: "numeric", day: "numeric",
+    });
+    const nyParts = nyFmt.formatToParts(releaseAt);
+    const nyYear  = parseInt(nyParts.find((p) => p.type === "year")!.value, 10);
+    const nyMonth = parseInt(nyParts.find((p) => p.type === "month")!.value, 10);
+    const nyDay   = parseInt(nyParts.find((p) => p.type === "day")!.value, 10);
+    const t930  = localToUtc(nyYear, nyMonth, nyDay,  9, 30, "America/New_York").getTime();
+    const t1100 = localToUtc(nyYear, nyMonth, nyDay, 11,  0, "America/New_York").getTime();
+    const fetchFrom = new Date(Math.min(releaseStart, t930  - 5 * 60_000));
+    const fetchTo   = new Date(Math.max(releaseEnd,   t1100 + 5 * 60_000));
+    const expectedMin = Math.round((fetchTo.getTime() - fetchFrom.getTime()) / 60_000);
 
+    for (const sym of syms) {
+      // Check if we already have bars for this combined window
       const { count } = await supabase
         .from("price_bars_1m")
         .select("ts", { count: "exact", head: true })
         .eq("symbol", sym.ticker)
-        .gte("ts", windowStart)
-        .lte("ts", windowEnd);
+        .gte("ts", fetchFrom.toISOString())
+        .lte("ts", fetchTo.toISOString());
 
-      if ((count ?? 0) >= 60) {
+      if ((count ?? 0) >= expectedMin * 0.5) {
         skipped++;
         continue;
       }
 
-      console.log(`[backfill-bars] fetching ${sym.ticker} @ ${ev.release_at}`);
-      const bars = await fetchBarsAroundEvent(sym.yf_symbol, sym.ticker, releaseAt, 120);
+      console.log(`[backfill-bars] fetching ${sym.ticker} @ ${ev.release_at} (${expectedMin}min window)`);
+      const bars = await fetch1mBars(sym.yf_symbol, sym.ticker, fetchFrom, fetchTo);
 
       if (bars === null) {
         console.error("[backfill-bars] Yahoo rate-limited — aborting run. Will retry on next scheduled run.");
