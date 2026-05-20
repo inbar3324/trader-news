@@ -56,8 +56,9 @@ async function main() {
 
   let fetched = 0;
   let skipped = 0;
+  let rateLimited = false;
 
-  for (const ev of evs) {
+  outer: for (const ev of evs) {
     const releaseAt = new Date(ev.release_at);
 
     for (const sym of syms) {
@@ -80,8 +81,14 @@ async function main() {
       console.log(`[backfill-bars] fetching ${sym.ticker} @ ${ev.release_at}`);
       const bars = await fetchBarsAroundEvent(sym.yf_symbol, sym.ticker, releaseAt, 120);
 
+      if (bars === null) {
+        console.error("[backfill-bars] Yahoo rate-limited — aborting run. Will retry on next scheduled run.");
+        rateLimited = true;
+        break outer;
+      }
+
       if (bars.length === 0) {
-        console.log(`  → no data (too old or market closed)`);
+        console.log(`  → no data (market closed or symbol unavailable for this window)`);
         skipped++;
         continue;
       }
@@ -101,6 +108,10 @@ async function main() {
     }
   }
 
+  if (rateLimited) {
+    console.log(`[backfill-bars] aborted early due to rate-limit — fetched ${fetched} windows ✗`);
+    process.exit(1);
+  }
   console.log(`[backfill-bars] done — fetched ${fetched} windows, skipped ${skipped} ✓`);
 }
 

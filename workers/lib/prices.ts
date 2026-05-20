@@ -15,15 +15,16 @@ export interface PriceBar {
 }
 
 // Fetch 1-min bars for yfSymbol in [from, to].
-// Returns empty array if no data available (older than 30 days, bad symbol, etc.)
-// On 429 rate-limit, retries once after a 12-second backoff.
+// Returns [] if no data (market closed, too old, bad symbol).
+// Returns null if Yahoo rate-limited (429) — caller should bail out early.
+// On first 429, retries once after 8s; if still 429, returns null.
 export async function fetch1mBars(
   yfSymbol: string,
   ticker: string,
   from: Date,
   to: Date,
   attempt = 1,
-): Promise<PriceBar[]> {
+): Promise<PriceBar[] | null> {
   try {
     const result = await yahooFinance.chart(yfSymbol, {
       period1: from,
@@ -50,26 +51,27 @@ export async function fetch1mBars(
     const msg = err instanceof Error ? err.message : String(err);
     const is429 = msg.includes("Too Many Requests") || msg.includes("429");
     if (is429 && attempt === 1) {
-      console.warn(`  [prices] 429 rate-limit for ${yfSymbol} — retrying in 12s`);
-      await sleep(12_000);
+      console.warn(`  [prices] 429 for ${yfSymbol} — retrying in 8s`);
+      await sleep(8_000);
       return fetch1mBars(yfSymbol, ticker, from, to, 2);
     }
     if (is429) {
-      console.warn(`  [prices] 429 rate-limit for ${yfSymbol} — giving up after retry`);
-    } else {
-      console.warn(`  [prices] fetch error for ${yfSymbol}: ${msg}`);
+      console.warn(`  [prices] 429 for ${yfSymbol} — rate-limited (signalling caller)`);
+      return null;
     }
+    console.warn(`  [prices] fetch error for ${yfSymbol}: ${msg}`);
     return [];
   }
 }
 
 // Fetch bars for ±windowMinutes around releaseAt.
+// Returns null if Yahoo rate-limited — caller should stop iterating.
 export async function fetchBarsAroundEvent(
   yfSymbol: string,
   ticker: string,
   releaseAt: Date,
   windowMinutes = 120,
-): Promise<PriceBar[]> {
+): Promise<PriceBar[] | null> {
   const from = new Date(releaseAt.getTime() - windowMinutes * 60_000);
   const to   = new Date(releaseAt.getTime() + windowMinutes * 60_000);
   return fetch1mBars(yfSymbol, ticker, from, to);
