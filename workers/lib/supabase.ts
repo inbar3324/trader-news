@@ -1,4 +1,10 @@
+import { config } from "dotenv";
+import { resolve, dirname } from "path";
+import { fileURLToPath } from "url";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+// Load .env.local from repo root (silent no-op on GH Actions where secrets are injected directly)
+config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../.env.local") });
 
 export function getServiceClient(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;

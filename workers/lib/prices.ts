@@ -25,12 +25,17 @@ export async function fetch1mBars(
   to: Date,
   attempt = 1,
 ): Promise<PriceBar[] | null> {
+  const cookieHeader = process.env.YAHOO_COOKIE;
+  const moduleOpts = cookieHeader
+    ? { validateResult: false as const, fetchOptions: { headers: { Cookie: cookieHeader } } }
+    : { validateResult: false as const };
+
   try {
     const result = await yahooFinance.chart(yfSymbol, {
       period1: from,
       period2: to,
       interval: "1m",
-    }, { validateResult: false });
+    }, moduleOpts);
 
     const quotes = result?.quotes ?? [];
     const bars: PriceBar[] = [];
