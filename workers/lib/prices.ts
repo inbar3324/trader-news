@@ -25,10 +25,14 @@ export async function fetch1mBars(
   to: Date,
   attempt = 1,
 ): Promise<PriceBar[] | null> {
+  const headers: Record<string, string> = {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    Accept: "application/json",
+  };
   const cookieHeader = process.env.YAHOO_COOKIE;
-  const moduleOpts = cookieHeader
-    ? { validateResult: false as const, fetchOptions: { headers: { Cookie: cookieHeader } } }
-    : { validateResult: false as const };
+  if (cookieHeader) headers["Cookie"] = cookieHeader;
+  const moduleOpts = { validateResult: false as const, fetchOptions: { headers } };
 
   try {
     const result = await yahooFinance.chart(yfSymbol, {
