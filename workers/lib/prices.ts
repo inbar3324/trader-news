@@ -16,11 +16,13 @@ export interface PriceBar {
 
 // Fetch 1-min bars for yfSymbol in [from, to].
 // Returns empty array if no data available (older than 30 days, bad symbol, etc.)
+// On 429 rate-limit, retries once after a 12-second backoff.
 export async function fetch1mBars(
   yfSymbol: string,
   ticker: string,
   from: Date,
   to: Date,
+  attempt = 1,
 ): Promise<PriceBar[]> {
   try {
     const result = await yahooFinance.chart(yfSymbol, {
@@ -44,7 +46,19 @@ export async function fetch1mBars(
       });
     }
     return bars;
-  } catch {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const is429 = msg.includes("Too Many Requests") || msg.includes("429");
+    if (is429 && attempt === 1) {
+      console.warn(`  [prices] 429 rate-limit for ${yfSymbol} — retrying in 12s`);
+      await sleep(12_000);
+      return fetch1mBars(yfSymbol, ticker, from, to, 2);
+    }
+    if (is429) {
+      console.warn(`  [prices] 429 rate-limit for ${yfSymbol} — giving up after retry`);
+    } else {
+      console.warn(`  [prices] fetch error for ${yfSymbol}: ${msg}`);
+    }
     return [];
   }
 }
