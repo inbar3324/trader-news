@@ -1,0 +1,29 @@
+name: poll-breaking
+
+on:
+  schedule:
+    # Every 5 min during NY session (Mon–Fri 13:00–21:00 UTC = 09:00–17:00 ET).
+    # 5 inputs needed for GH cron: minute hour day-of-month month day-of-week
+    - cron: "*/5 13-21 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  poll-breaking:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: poll-breaking
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm --workspace workers run poll-breaking
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GEMINI_KEY_WRITER: ${{ secrets.GEMINI_KEY_WRITER }}
+          GEMINI_KEY_RESEARCHER: ${{ secrets.GEMINI_KEY_RESEARCHER }}

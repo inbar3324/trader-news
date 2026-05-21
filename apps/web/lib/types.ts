@@ -39,6 +39,31 @@ export interface Symbol {
   pip_size: number | null;
 }
 
+export type BreakingSource = "fed" | "ecb" | "wsj" | "yahoo";
+export type BreakingCategory = "fed" | "macro" | "geo" | "corp" | "noise";
+export type AiConfidence = "high" | "medium" | "low";
+
+export interface BreakingHeadline {
+  id: string;
+  source_id: string;
+  source_name: BreakingSource;
+  headline: string;
+  source_url: string | null;
+  published_at: string;
+  discovered_at: string;
+  impact_score: number | null;
+  category: BreakingCategory | null;
+  classifier_reason: string | null;
+  classified_at: string | null;
+  summary: string | null;
+  market_implication: string | null;
+  affected_symbols: string[] | null;
+  ai_confidence: AiConfidence | null;
+  ai_verified: boolean | null;
+  ai_enriched: boolean;
+  ai_enriched_at: string | null;
+}
+
 export interface HistoricalReaction {
   event_type_id: string;
   symbol: string;

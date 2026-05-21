@@ -12,12 +12,14 @@
     "enrich-upcoming": "tsx enrich-upcoming.ts",
     "match-events": "tsx match-events.ts",
     "analyze-vol-score": "tsx analyze-vol-score.ts",
+    "poll-breaking": "tsx poll-breaking.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.0",
     "@supabase/supabase-js": "^2.46.0",
     "dotenv": "^16.4.5",
+    "rss-parser": "^3.13.0",
     "yahoo-finance2": "^2.11.3"
   },
   "devDependencies": {

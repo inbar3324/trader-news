@@ -96,11 +96,26 @@ export async function callGemini({
     ]);
   } catch (err: unknown) {
     const msg = String((err as Error)?.message ?? '');
-    if (msg.includes('429') || msg.includes('quota') || msg.toLowerCase().includes('resource exhausted')) {
+    const lower = msg.toLowerCase();
+    // Differentiate: per-minute rate limit (15 RPM) vs daily quota (1000 RPD).
+    // Per-minute hits are transient — back off, don't mark the whole day exhausted.
+    // Daily quota responses include "RESOURCE_EXHAUSTED" / "quota" / "exceeded your current quota".
+    const isDailyQuota =
+      lower.includes('resource_exhausted') ||
+      lower.includes('resource exhausted') ||
+      lower.includes('exceeded your current quota') ||
+      lower.includes('quota exceeded') ||
+      (lower.includes('quota') && lower.includes('day'));
+    const isRateLimit429 = msg.includes('429') && !isDailyQuota;
+
+    if (isDailyQuota) {
       await supabase
         .from('gemini_usage')
         .upsert({ date: today, role, exhausted_at: new Date().toISOString() }, { onConflict: 'date,role' });
-      throw new QuotaHardLimitError(`Gemini ${role} hard quota (429) on ${today}`);
+      throw new QuotaHardLimitError(`Gemini ${role} daily quota exhausted on ${today}`);
+    }
+    if (isRateLimit429) {
+      throw new QuotaSoftLimitError(`Gemini ${role} per-minute rate limit hit — back off and retry next run`);
     }
     throw err;
   }
