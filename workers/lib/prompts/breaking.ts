@@ -41,6 +41,12 @@ export function buildBreakingPrompt(headline: {
   published_at: string;
   source_url: string | null;
 }): string {
+  // The source IS already tier-1 when it comes from Fed, ECB, or WSJ.
+  // In those cases the headline is self-verifying — we still want a summary.
+  const sourceIsTier1 = headline.source_name === 'fed'
+    || headline.source_name === 'ecb'
+    || headline.source_name === 'wsj';
+
   const lines = [
     `[${TEMPLATE_VERSION}] You are a verification analyst for US day-traders.`,
     `Headline: "${headline.text}"`,
@@ -49,14 +55,29 @@ export function buildBreakingPrompt(headline: {
   ];
   if (headline.source_url) lines.push(`Source URL: ${headline.source_url}`);
 
+  if (sourceIsTier1) {
+    lines.push(
+      '',
+      `The reporting source (${headline.source_name}) is itself a tier-1 publisher.`,
+      'You MAY treat this headline as confirmed without external corroboration.',
+      'Use Google Search to gather additional context (market reaction, related coverage),',
+      'but set verified=true based on the source alone. ALWAYS produce a summary —',
+      'even for administrative or routine announcements (Fed minutes, FOMC statements, ECB releases).',
+    );
+  } else {
+    lines.push(
+      '',
+      'Use Google Search to verify this headline against:',
+      '  Reuters, Bloomberg, Financial Times, Wall Street Journal,',
+      '  or official central-bank / government pages (federalreserve.gov, ecb.europa.eu, bls.gov, treasury.gov).',
+      '',
+      'If you cannot confirm the headline from at least one of those tier-1 sources,',
+      'set verified=false. Rumors, social-media-only, blog-only, or speculative pieces => verified=false.',
+      'Even when verified=false, still produce summary_60w and market_implication based on the headline text.',
+    );
+  }
+
   lines.push(
-    '',
-    'Use Google Search to verify this headline against:',
-    '  Reuters, Bloomberg, Financial Times, Wall Street Journal,',
-    '  or official central-bank / government pages (federalreserve.gov, ecb.europa.eu, bls.gov, treasury.gov).',
-    '',
-    'If you cannot confirm the headline from at least one of those tier-1 sources,',
-    'set verified=false. Rumors, social-media-only, blog-only, or speculative pieces => verified=false.',
     '',
     'Return JSON only, no markdown, no code fences, exactly these fields:',
     '  verified            (boolean)',
