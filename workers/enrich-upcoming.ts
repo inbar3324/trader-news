@@ -1,5 +1,5 @@
 import { getServiceClient } from './lib/supabase.js';
-import { callGemini, QuotaSoftLimitError, QuotaHardLimitError } from './lib/gemini.js';
+import { callGemini, QuotaSoftLimitError, QuotaHardLimitError, EmptyResponseError } from './lib/gemini.js';
 import { getCachedEnrichment, upsertEnrichment } from './lib/enrichment-cache.js';
 import { buildExplainerPrompt, isSpeechEvent, EXPLAINER_SCHEMA } from './lib/prompts/explainer.js';
 
@@ -85,6 +85,12 @@ async function main() {
       if (err instanceof QuotaSoftLimitError || err instanceof QuotaHardLimitError) {
         console.warn(`Quota limit: ${(err as Error).message} — stopping gracefully.`);
         process.exit(0);
+      }
+      if (err instanceof EmptyResponseError) {
+        // Gemini refused (safety/recitation/no sources). Skip — next hourly run won't retry the same prompt anyway.
+        console.warn(`  [skipped] ${ev.title}: ${(err as Error).message}`);
+        failed++;
+        continue;
       }
       console.error(`  [error] ${ev.title}: ${(err as Error).message}`);
       failed++;

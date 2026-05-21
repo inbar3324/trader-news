@@ -1,5 +1,5 @@
 import { getServiceClient } from './lib/supabase.js';
-import { callGemini, QuotaSoftLimitError, QuotaHardLimitError } from './lib/gemini.js';
+import { callGemini, QuotaSoftLimitError, QuotaHardLimitError, EmptyResponseError } from './lib/gemini.js';
 import { fetchAllSources, type NewsItem } from './lib/news-sources.js';
 import {
   buildClassifierPrompt,
@@ -172,6 +172,23 @@ async function main() {
       if (err instanceof QuotaSoftLimitError || err instanceof QuotaHardLimitError) {
         console.warn(`Quota limit hit during verify: ${(err as Error).message}`);
         break;
+      }
+      if (err instanceof EmptyResponseError) {
+        // Gemini refused to verify (safety filter, recitation, low confidence, or no tier-1 sources).
+        // Mark the row so we don't retry it forever — but signal verify=false.
+        await supabase
+          .from('breaking_headlines')
+          .update({
+            ai_enriched: true,
+            ai_enriched_at: new Date().toISOString(),
+            ai_verified: false,
+            ai_confidence: 'low',
+            summary: null,
+            market_implication: null,
+          })
+          .eq('id', id);
+        console.warn(`  [verify-skipped] ${item.headline.slice(0, 60)}: ${(err as Error).message}`);
+        continue;
       }
       console.error(`  [verify-error] ${item.headline.slice(0, 60)}: ${(err as Error).message}`);
     }

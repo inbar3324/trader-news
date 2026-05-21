@@ -7,6 +7,9 @@ export class QuotaSoftLimitError extends Error {
 export class QuotaHardLimitError extends Error {
   constructor(msg: string) { super(msg); this.name = 'QuotaHardLimitError'; }
 }
+export class EmptyResponseError extends Error {
+  constructor(msg: string) { super(msg); this.name = 'EmptyResponseError'; }
+}
 
 // Legacy roles still recognized by callers — used only as a usage-stats tag now,
 // no longer selects which API key gets used (the pool decides).
@@ -117,14 +120,30 @@ async function attemptCall({
     ),
   ]);
 
-  const text = result.response.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+  const candidate = result.response.candidates?.[0];
+  const finishReason = candidate?.finishReason;
+  const text = candidate?.content?.parts?.[0]?.text ?? '';
   const tokens_in  = result.response.usageMetadata?.promptTokenCount ?? 0;
   const tokens_out = result.response.usageMetadata?.candidatesTokenCount ?? 0;
+
+  // If Gemini stopped for safety/recitation/other reasons OR returned empty text under search grounding,
+  // the response is unusable. Surface a specific error so callers can mark the row as verify-skipped.
+  if (!text || (finishReason && finishReason !== 'STOP')) {
+    throw new EmptyResponseError(
+      `Gemini returned no usable text (slot=${slot}, finishReason=${finishReason ?? 'unknown'}, search=${useSearch})`,
+    );
+  }
 
   let json: unknown;
   if (schema) {
     const cleaned = text.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim();
-    json = JSON.parse(cleaned);
+    try {
+      json = JSON.parse(cleaned);
+    } catch (parseErr) {
+      throw new EmptyResponseError(
+        `Gemini returned non-JSON text (slot=${slot}, len=${text.length}): ${(parseErr as Error).message}`,
+      );
+    }
   }
 
   return { text, json, tokens_in, tokens_out };
