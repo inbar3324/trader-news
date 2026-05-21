@@ -45,25 +45,22 @@ async function main() {
     `[pull-calendar] matched ${matchedCount}/${rows.length} to event_types (unmatched will still be saved)`,
   );
 
-  // Upsert events on (source, source_ref) — schema's unique constraint
-  const { error: upsertErr, count } = await supabase
+  // Upsert events on (source, source_ref) — schema's unique constraint.
+  // Use .select() so we get the ids back without a separate query (avoids
+  // 16KB URL-length limit when looking up hundreds of source_refs).
+  const { data: upserted, error: upsertErr } = await supabase
     .from("events")
-    .upsert(rows, { onConflict: "source,source_ref", count: "exact" });
+    .upsert(rows, { onConflict: "source,source_ref" })
+    .select("id, source, source_ref");
   if (upsertErr) throw upsertErr;
-  console.log(`[pull-calendar] upserted ${count ?? rows.length} events ✓`);
+  console.log(`[pull-calendar] upserted ${upserted?.length ?? rows.length} events ✓`);
 
-  // Pre-create event_occurrences rows with forecast/previous so the calendar shows them immediately
-  const occRows = [];
-  const { data: ids, error: idsErr } = await supabase
-    .from("events")
-    .select("id, source, source_ref")
-    .in(
-      "source_ref",
-      rows.map((r) => r.source_ref),
-    );
-  if (idsErr) throw idsErr;
-
-  const idBySource = new Map((ids ?? []).map((r) => [`${r.source}:${r.source_ref}`, r.id]));
+  // Pre-create event_occurrences rows with forecast/previous so the calendar
+  // shows them immediately.
+  const idBySource = new Map(
+    (upserted ?? []).map((r) => [`${r.source}:${r.source_ref}`, r.id as string]),
+  );
+  const occRows: Array<{ event_id: string; forecast: number | null; previous: number | null }> = [];
   for (let i = 0; i < rows.length; i++) {
     const id = idBySource.get(`${rows[i].source}:${rows[i].source_ref}`);
     if (!id) continue;
@@ -75,11 +72,18 @@ async function main() {
   }
 
   if (occRows.length > 0) {
-    const { error: occErr } = await supabase
-      .from("event_occurrences")
-      .upsert(occRows, { onConflict: "event_id" });
-    if (occErr) throw occErr;
-    console.log(`[pull-calendar] upserted ${occRows.length} occurrence rows ✓`);
+    // Batch occurrence upserts in chunks to stay under request size limits.
+    const CHUNK = 200;
+    let total = 0;
+    for (let i = 0; i < occRows.length; i += CHUNK) {
+      const slice = occRows.slice(i, i + CHUNK);
+      const { error: occErr } = await supabase
+        .from("event_occurrences")
+        .upsert(slice, { onConflict: "event_id" });
+      if (occErr) throw occErr;
+      total += slice.length;
+    }
+    console.log(`[pull-calendar] upserted ${total} occurrence rows ✓`);
   }
 }
 

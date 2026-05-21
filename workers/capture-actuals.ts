@@ -19,14 +19,22 @@ async function main() {
 
   const supabase = getServiceClient();
 
-  // Look up event IDs by source_ref
-  const { data: rows, error: fetchErr } = await supabase
-    .from("events")
-    .select("id, source_ref")
-    .in("source_ref", withActuals.map((e) => e.source_ref));
-  if (fetchErr) throw fetchErr;
-
-  const idByRef = new Map((rows ?? []).map((r) => [r.source_ref as string, r.id as string]));
+  // Look up event IDs by source_ref. Batch to stay under URL length limits
+  // (Supabase rejects requests with header lines > ~16KB).
+  const idByRef = new Map<string, string>();
+  const refs = withActuals.map((e) => e.source_ref);
+  const CHUNK = 80;
+  for (let i = 0; i < refs.length; i += CHUNK) {
+    const slice = refs.slice(i, i + CHUNK);
+    const { data: rows, error: fetchErr } = await supabase
+      .from("events")
+      .select("id, source_ref")
+      .in("source_ref", slice);
+    if (fetchErr) throw fetchErr;
+    for (const r of rows ?? []) {
+      idByRef.set(r.source_ref as string, r.id as string);
+    }
+  }
 
   const occRows = withActuals
     .map((e) => {
@@ -48,10 +56,13 @@ async function main() {
     return;
   }
 
-  const { error: upsertErr } = await supabase
-    .from("event_occurrences")
-    .upsert(occRows, { onConflict: "event_id" });
-  if (upsertErr) throw upsertErr;
+  for (let i = 0; i < occRows.length; i += 200) {
+    const slice = occRows.slice(i, i + 200);
+    const { error: upsertErr } = await supabase
+      .from("event_occurrences")
+      .upsert(slice, { onConflict: "event_id" });
+    if (upsertErr) throw upsertErr;
+  }
 
   console.log(`[capture-actuals] upserted actuals for ${occRows.length} events ✓`);
 }

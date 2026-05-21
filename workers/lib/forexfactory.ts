@@ -5,6 +5,15 @@
 // including the `actual` field, so ACTUAL values were never populated.
 // FF's own page embeds the full data (incl. actuals + revisions) and supports
 // arbitrary week navigation, so we can also see weeks beyond "this week".
+//
+// Why curl instead of fetch: Cloudflare rejects Node's TLS handshake (JA3
+// fingerprint) with 403, but accepts curl's. curl ships with Windows 10+,
+// macOS, and GitHub Actions Ubuntu runners, so we shell out to it.
+
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
 
 export type FFImpactName = "low" | "medium" | "high" | "holiday";
 
@@ -29,6 +38,23 @@ interface FFCalendarState {
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
+async function curlGet(url: string): Promise<string> {
+  const { stdout } = await execFileAsync(
+    "curl",
+    [
+      "-sS",
+      "--fail-with-body",
+      "--max-time", "30",
+      "-A", UA,
+      "-H", "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "-H", "Accept-Language: en-US,en;q=0.9",
+      url,
+    ],
+    { maxBuffer: 20 * 1024 * 1024 },
+  );
+  return stdout;
+}
+
 const MONTHS = [
   "jan", "feb", "mar", "apr", "may", "jun",
   "jul", "aug", "sep", "oct", "nov", "dec",
@@ -48,12 +74,13 @@ export function weekParamForOffset(weekOffset: number, now: Date = new Date()): 
 }
 
 /**
- * Extract a balanced `{...}` JSON object starting at the first `{` after `startIdx`.
- * Naive but adequate for FF's machine-generated JSON which never contains
- * unescaped braces inside string literals.
+ * Extract a balanced bracketed region (opener/closer ∈ {`{`/`}`, `[`/`]`})
+ * starting at the first `opener` found at or after `startIdx`. Skips string
+ * literals correctly. Adequate for FF's machine-generated content.
  */
-function extractBalancedObject(src: string, startIdx: number): string | null {
-  const open = src.indexOf("{", startIdx);
+function extractBalanced(src: string, startIdx: number, opener: "{" | "["): string | null {
+  const closer = opener === "{" ? "}" : "]";
+  const open = src.indexOf(opener, startIdx);
   if (open === -1) return null;
   let depth = 0;
   let inStr = false;
@@ -67,8 +94,8 @@ function extractBalancedObject(src: string, startIdx: number): string | null {
       continue;
     }
     if (c === '"') { inStr = true; continue; }
-    if (c === "{") depth++;
-    else if (c === "}") {
+    if (c === opener) depth++;
+    else if (c === closer) {
       depth--;
       if (depth === 0) return src.slice(open, i + 1);
     }
@@ -78,45 +105,36 @@ function extractBalancedObject(src: string, startIdx: number): string | null {
 
 export async function fetchFFWeek(weekParam: string, attempt = 1): Promise<FFRawEvent[]> {
   const url = `https://www.forexfactory.com/calendar?week=${weekParam}`;
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent": UA,
-      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "Accept-Language": "en-US,en;q=0.9",
-      "Accept-Encoding": "gzip, deflate, br",
-      "Cache-Control": "no-cache",
-      "Sec-Fetch-Dest": "document",
-      "Sec-Fetch-Mode": "navigate",
-      "Sec-Fetch-Site": "none",
-      "Upgrade-Insecure-Requests": "1",
-    },
-  });
-  if (res.status === 403 || res.status === 429) {
+  let html: string;
+  try {
+    html = await curlGet(url);
+  } catch (err) {
     if (attempt < 3) {
       const wait = 5_000 * attempt;
-      console.warn(`[ff] ${res.status} for ${weekParam}, retrying in ${wait}ms (attempt ${attempt + 1})`);
+      console.warn(`[ff] curl failed for ${weekParam}, retrying in ${wait}ms (attempt ${attempt + 1}):`, (err as Error).message);
       await new Promise((r) => setTimeout(r, wait));
       return fetchFFWeek(weekParam, attempt + 1);
     }
+    throw new Error(`ForexFactory fetch failed for ${weekParam}: ${(err as Error).message}`);
   }
-  if (!res.ok) {
-    throw new Error(`ForexFactory fetch failed for ${weekParam}: ${res.status} ${res.statusText}`);
-  }
-  const html = await res.text();
   const marker = "window.calendarComponentStates[1]";
   const markerIdx = html.indexOf(marker);
   if (markerIdx === -1) {
     throw new Error(`ForexFactory: ${marker} not found in HTML for ${weekParam}`);
   }
-  const jsonText = extractBalancedObject(html, markerIdx + marker.length);
-  if (!jsonText) {
-    throw new Error(`ForexFactory: could not extract JSON for ${weekParam}`);
+  // The wrapper object uses unquoted JS keys (`days: [...], time: ...`) so
+  // JSON.parse can't read the whole thing. But each item inside `days` is
+  // pure JSON, so we extract just the days array.
+  const daysKeyIdx = html.indexOf("days:", markerIdx);
+  if (daysKeyIdx === -1 || daysKeyIdx > markerIdx + 200) {
+    throw new Error(`ForexFactory: 'days:' key not found near marker for ${weekParam}`);
   }
-  const state = JSON.parse(jsonText) as FFCalendarState;
-  if (!state.days) {
-    throw new Error(`ForexFactory: parsed JSON has no .days for ${weekParam}`);
+  const daysText = extractBalanced(html, daysKeyIdx, "[");
+  if (!daysText) {
+    throw new Error(`ForexFactory: could not extract days array for ${weekParam}`);
   }
-  return state.days.flatMap((d) => d.events ?? []);
+  const days = JSON.parse(daysText) as FFCalendarState["days"];
+  return days.flatMap((d) => d.events ?? []);
 }
 
 const IMPACT_MAP: Record<string, "low" | "medium" | "high" | "holiday"> = {
