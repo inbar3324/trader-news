@@ -1,14 +1,14 @@
-// Pull this week's economic calendar from FairEconomy → Supabase events table.
+// Pull the next 4 weeks of economic calendar from ForexFactory → Supabase events table.
 // Run: npm run worker:pull-calendar
 // Scheduled via .github/workflows/pull-calendar.yml
 
-import { fetchFairEconomyWeek, normalize } from "./lib/faireconomy.js";
+import { fetchFFWeeks, normalize } from "./lib/forexfactory.js";
 import { getServiceClient } from "./lib/supabase.js";
 import { matchEventType, type EventTypeRow } from "./lib/event-type-matcher.js";
 
 async function main() {
-  console.log("[pull-calendar] fetching FairEconomy feed…");
-  const raw = await fetchFairEconomyWeek();
+  console.log("[pull-calendar] fetching ForexFactory (this week + 3 future weeks)…");
+  const raw = await fetchFFWeeks([0, 1, 2, 3]);
   const events = normalize(raw);
   console.log(`[pull-calendar] normalized ${events.length} events`);
 

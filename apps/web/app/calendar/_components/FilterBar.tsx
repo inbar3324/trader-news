@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 
 const CURRENCIES = ["USD", "EUR", "GBP", "JPY", "AUD"] as const;
@@ -11,12 +12,31 @@ const RANGES = [
   { value: "today", label: "Today" },
   { value: "week", label: "This week" },
   { value: "next", label: "Next week" },
+  { value: "next2", label: "+2 wks" },
+  { value: "next3", label: "+3 wks" },
+  { value: "month", label: "4 wks" },
 ] as const;
 
 export function FilterBar() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
+
+  const [query, setQuery] = useState(params.get("q") ?? "");
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const next = new URLSearchParams(params.toString());
+      const trimmed = query.trim();
+      if (trimmed) next.set("q", trimmed);
+      else next.delete("q");
+      if (next.toString() !== params.toString()) {
+        router.replace(`${pathname}?${next.toString()}`);
+      }
+    }, 250);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
 
   function toggle(key: string, value: string) {
     const current = new Set((params.get(key) ?? "").split(",").filter(Boolean));
@@ -93,6 +113,32 @@ export function FilterBar() {
           </button>
         ))}
       </div>
+
+      <label htmlFor="calendar-search" className="sr-only">
+        Search events by title
+      </label>
+      <input
+        id="calendar-search"
+        type="search"
+        inputMode="search"
+        autoComplete="off"
+        spellCheck={false}
+        aria-label="Search events by title"
+        placeholder="Search events…  /"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            setQuery("");
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+        className="ml-auto w-[200px] rounded border border-[var(--color-border)] bg-[var(--color-surface-hi)] px-2 py-1 text-[12px] placeholder:text-[var(--color-text-mute)] focus-visible:border-[var(--color-accent)] focus-visible:outline-none"
+      />
+
+      <span className="hidden text-[10px] text-[var(--color-text-mute)] md:inline">
+        / search • j/k nav • Enter open
+      </span>
     </div>
   );
 }

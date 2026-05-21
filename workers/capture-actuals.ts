@@ -1,16 +1,16 @@
 // Capture actuals for released events.
-// Fetches the FairEconomy feed, finds events where actual is now populated,
-// and upserts event_occurrences.actual + released_at.
+// Scrapes the ForexFactory calendar (current week), finds events where
+// `actual` is now populated, and upserts event_occurrences.actual + released_at.
 //
 // Run: npm --workspace workers run capture-actuals
 // Scheduled: 5,20,35,50 * 7-22 * * 1-5  (every 15min during US+EU sessions, UTC)
 
-import { fetchFairEconomyWeek, normalize } from "./lib/faireconomy.js";
+import { fetchFFWeeks, normalize } from "./lib/forexfactory.js";
 import { getServiceClient } from "./lib/supabase.js";
 
 async function main() {
-  console.log("[capture-actuals] fetching FairEconomy feed…");
-  const raw = await fetchFairEconomyWeek();
+  console.log("[capture-actuals] fetching ForexFactory current week…");
+  const raw = await fetchFFWeeks([0]);
   const events = normalize(raw);
 
   const withActuals = events.filter((e) => e.actual !== null);
