@@ -1,15 +1,51 @@
 import { CalendarTable } from "./_components/CalendarTable";
+import { CalendarSidebar } from "./_components/CalendarSidebar";
 import { FilterBar } from "./_components/FilterBar";
 import { KeyboardNav } from "./_components/KeyboardNav";
+import { DataSourceBanner } from "./_components/DataSourceBanner";
 import { MOCK_EVENTS } from "@/lib/mock-events";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import type { CalendarEvent, CurrencyCode, ImpactLevel } from "@/lib/types";
 
 export const revalidate = 300;
 
-type SearchParams = Promise<{ currency?: string; impact?: string; range?: string; q?: string }>;
+type SearchParams = Promise<{
+  currency?: string;
+  impact?: string;
+  range?: string;
+  q?: string;
+  d?: string;
+}>;
 
-function rangeToWindow(range: string | undefined): { from: Date; to: Date } {
+const NY_TZ = "America/New_York";
+
+function ymdToNYStart(ymd: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  // Approximate: treat the date's start in NY by using UTC midnight minus NY offset.
+  // For UI filtering this is close enough since events have ISO timestamps with offset.
+  // Use a 12pm UTC anchor so DST flips don't slip the day.
+  const anchor = new Date(Date.UTC(y, mo - 1, d, 12, 0, 0));
+  const nyMidnight = new Date(
+    anchor.toLocaleString("en-US", { timeZone: NY_TZ }),
+  );
+  nyMidnight.setHours(0, 0, 0, 0);
+  return nyMidnight;
+}
+
+function rangeToWindow(range: string | undefined, dayParam: string | undefined): { from: Date; to: Date } {
+  if (dayParam) {
+    const start = ymdToNYStart(dayParam);
+    if (start) {
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
+      return { from: start, to: end };
+    }
+  }
+
   const now = new Date();
   const startOfToday = new Date(now);
   startOfToday.setUTCHours(0, 0, 0, 0);
@@ -18,6 +54,13 @@ function rangeToWindow(range: string | undefined): { from: Date; to: Date } {
     const end = new Date(startOfToday);
     end.setUTCDate(end.getUTCDate() + 1);
     return { from: startOfToday, to: end };
+  }
+  if (range === "tomorrow") {
+    const start = new Date(startOfToday);
+    start.setUTCDate(start.getUTCDate() + 1);
+    const end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 1);
+    return { from: start, to: end };
   }
   if (range === "next") {
     const start = new Date(startOfToday);
@@ -84,9 +127,6 @@ async function fetchEvents(window: { from: Date; to: Date }): Promise<{
   if (error || !data) return { events: MOCK_EVENTS, source: "mock" };
 
   const events: CalendarEvent[] = data.map((row: Record<string, unknown>) => {
-    // PostgREST returns embedded resources as either an object (1:1) or an
-    // array (1:N) depending on how it detects the FK. event_occurrences is
-    // 1:1 (event_id is PK) but be defensive against both shapes.
     const rawOcc = row.event_occurrences ?? null;
     const occ = (Array.isArray(rawOcc) ? rawOcc[0] ?? null : rawOcc) as
       | { actual: number | null; forecast: number | null; previous: number | null }
@@ -123,21 +163,22 @@ export default async function CalendarPage({ searchParams }: { searchParams: Sea
   const currencies = new Set((sp.currency ?? "").split(",").filter(Boolean));
   const impacts = new Set((sp.impact ?? "").split(",").filter(Boolean));
   const query = (sp.q ?? "").toLowerCase().trim();
-  const window = rangeToWindow(sp.range);
+  const window = rangeToWindow(sp.range, sp.d);
 
   const { events, source } = await fetchEvents(window);
   const filtered = filterEvents(events, currencies, impacts, window, query);
 
   return (
-    <div className="mx-auto max-w-[1400px]">
-      <FilterBar />
-      <KeyboardNav />
-      {source === "mock" && (
-        <div className="border-b border-amber-500/30 bg-amber-500/10 px-4 py-1.5 text-[11px] text-amber-200">
-          Showing mock data — Supabase env vars not set. Add them to <code className="font-mono">.env.local</code> and run the <code className="font-mono">pull-calendar</code> worker.
+    <div className="mx-auto max-w-[1600px]">
+      <DataSourceBanner source={source} />
+      <div className="lg:flex">
+        <CalendarSidebar />
+        <div className="min-w-0 flex-1">
+          <FilterBar />
+          <KeyboardNav />
+          <CalendarTable events={filtered} />
         </div>
-      )}
-      <CalendarTable events={filtered} />
+      </div>
     </div>
   );
 }

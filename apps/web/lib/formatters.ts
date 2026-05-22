@@ -48,14 +48,37 @@ export function impactRowClass(impact: ImpactLevel): string {
 export function impactDotColor(impact: ImpactLevel): string {
   switch (impact) {
     case "high":
-      return "bg-red-500";
+      return "bg-[var(--color-impact-high-fg)]";
     case "medium":
-      return "bg-amber-500";
+      return "bg-[var(--color-impact-med-fg)]";
     case "low":
-      return "bg-zinc-500";
+      return "bg-[var(--color-impact-low-fg)]";
     case "holiday":
       return "bg-sky-500";
   }
+}
+
+export function impactLabel(impact: ImpactLevel): string {
+  switch (impact) {
+    case "high":
+      return "High impact";
+    case "medium":
+      return "Medium impact";
+    case "low":
+      return "Low impact";
+    case "holiday":
+      return "Holiday";
+  }
+}
+
+export function deltaDirection(
+  actual: number | null,
+  forecast: number | null,
+): "pos" | "neg" | "flat" | null {
+  if (actual === null || forecast === null) return null;
+  if (actual > forecast) return "pos";
+  if (actual < forecast) return "neg";
+  return "flat";
 }
 
 export function formatNumber(n: number | null, digits = 2): string {

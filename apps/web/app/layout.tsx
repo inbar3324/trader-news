@@ -1,6 +1,23 @@
 import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { HeaderAuth } from "./_components/HeaderAuth";
+import { HeaderBar } from "./_components/HeaderBar";
+
+const geistSans = Geist({ subsets: ["latin"], variable: "--font-geist-sans", display: "swap" });
+const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono", display: "swap" });
+
+// Runs synchronously in <head> before paint to avoid FOUC.
+const themeInitScript = `(function(){try{
+  var t=localStorage.getItem('tn:theme');
+  if(t!=='dark'&&t!=='light') t='light';
+  document.documentElement.setAttribute('data-theme',t);
+  var d=localStorage.getItem('tn:density');
+  if(d!=='compact'&&d!=='cozy'&&d!=='relaxed') d='cozy';
+  document.documentElement.classList.add('density-'+d);
+}catch(e){
+  document.documentElement.setAttribute('data-theme','light');
+  document.documentElement.classList.add('density-cozy');
+}})();`;
 
 export const metadata: Metadata = {
   title: "TraderNews — AI economic calendar for day traders",
@@ -10,25 +27,17 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable}`}
+      suppressHydrationWarning
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body>
-        <div className="min-h-screen">
-          <header className="border-b border-[var(--color-border)] bg-[var(--color-surface)]">
-            <div className="mx-auto flex max-w-[1400px] items-center justify-between px-4 py-2.5">
-              <div className="flex items-center gap-2">
-                <span className="inline-block h-2 w-2 rounded-full bg-[var(--color-accent)]" />
-                <span className="font-semibold tracking-tight">TraderNews</span>
-                <span className="ml-2 rounded bg-[var(--color-surface-hi)] px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-[var(--color-text-dim)]">
-                  v0.2
-                </span>
-              </div>
-              <nav className="flex items-center gap-4 text-[12px] text-[var(--color-text-dim)]">
-                <a href="/calendar" className="hover:text-[var(--color-text)]">Calendar</a>
-                <a href="/breaking" className="hover:text-[var(--color-text)]">Breaking</a>
-                <HeaderAuth />
-              </nav>
-            </div>
-          </header>
+        <div className="min-h-[100dvh]">
+          <HeaderBar />
           <main>{children}</main>
         </div>
       </body>
