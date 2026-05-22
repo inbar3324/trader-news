@@ -7,8 +7,9 @@
 // arbitrary week navigation, so we can also see weeks beyond "this week".
 //
 // Why curl instead of fetch: Cloudflare rejects Node's TLS handshake (JA3
-// fingerprint) with 403, but accepts curl's. curl ships with Windows 10+,
-// macOS, and GitHub Actions Ubuntu runners, so we shell out to it.
+// fingerprint) with 403, but accepts curl's. Also, FF's WAF blocks GitHub
+// Actions cloud IPs — this worker is therefore run on a self-hosted runner
+// on the user's PC (residential IP). See README in repo root.
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";

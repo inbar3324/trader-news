@@ -8,13 +8,12 @@ on:
 
 jobs:
   capture-actuals:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Windows]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
       - run: npm ci
       - run: npm --workspace workers run capture-actuals
         env:
