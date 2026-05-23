@@ -5,10 +5,11 @@ on:
     # Every 5 min during NY session (Mon–Fri 13:00–21:00 UTC = 09:00–17:00 ET).
     # 5 inputs needed for GH cron: minute hour day-of-month month day-of-week
     - cron: "*/5 13-21 * * 1-5"
-    # Stuck-row safety net: every hour at :30, 24/7. Runs --stuck-only so
-    # no source fetch / no classifier — only drains the Stage 2 backlog.
-    # Cheap when there's nothing stuck (one Supabase query, 0 Gemini calls).
-    - cron: "30 * * * *"
+    # Stuck-row safety net: every hour at :30, Mon–Sat (Sunday skipped — no
+    # US trading). Runs --stuck-only so no source fetch / no classifier —
+    # only drains the Stage 2 backlog. Cheap when there's nothing stuck
+    # (one Supabase query, 0 Gemini calls).
+    - cron: "30 * * * 1-6"
   workflow_dispatch:
 
 jobs:
