@@ -78,48 +78,66 @@ async function summarizeWithoutSearch(supabase: ReturnType<typeof getServiceClie
 async function main() {
   const supabase = getServiceClient();
 
-  console.log('Fetching news from 4 sources (Fed/ECB/WSJ/Yahoo)...');
-  const items = await fetchAllSources();
-  console.log(`  fetched ${items.length} unique items`);
-
-  if (items.length === 0) {
-    console.log('No items — done.');
-    return;
-  }
-
-  // Insert all items, ignoring already-seen rows (unique source_id).
-  // Returning '*' lets us know which rows are actually new.
-  const { data: inserted, error: insErr } = await supabase
-    .from('breaking_headlines')
-    .upsert(
-      items.map(it => ({
-        source_id: it.source_id,
-        source_name: it.source_name,
-        headline: it.headline,
-        source_url: it.source_url,
-        published_at: it.published_at,
-      })),
-      { onConflict: 'source_id', ignoreDuplicates: true },
-    )
-    .select('id, source_id, source_name, headline, source_url, published_at, impact_score');
-
-  if (insErr) {
-    console.error('Insert failed:', insErr.message);
-    process.exit(1);
-  }
-
-  // Only rows we haven't classified yet (impact_score IS NULL).
-  // upsert with ignoreDuplicates returns ONLY the actually-inserted rows.
-  const newRows = (inserted ?? []).filter(r => r.impact_score === null);
-  console.log(`  ${newRows.length} new headlines to classify`);
+  // --stuck-only: skip source fetch + classifier; only drain Stage 2 backlog.
+  // Used by the weekend cron to clear rows that Friday's quota cap stranded,
+  // without burning quota that other workers (enrich-upcoming) need.
+  const stuckOnly = process.argv.includes('--stuck-only');
 
   let classified = 0;
   let verified = 0;
   let skipped = 0;
   const enrichQueue: { id: string; item: NewsItem }[] = [];
+  type NewRow = {
+    id: string;
+    source_id: string;
+    source_name: string;
+    headline: string;
+    source_url: string | null;
+    published_at: string;
+    impact_score: number | null;
+  };
+  let newRows: NewRow[] = [];
 
-  // Stage 1: E.6 classifier on every new row (with cap).
-  for (const row of newRows.slice(0, MAX_CLASSIFIER_CALLS)) {
+  if (!stuckOnly) {
+    console.log('Fetching news from 4 sources (Fed/ECB/WSJ/Yahoo)...');
+    const items = await fetchAllSources();
+    console.log(`  fetched ${items.length} unique items`);
+
+    if (items.length === 0) {
+      console.log('No items — skipping to stuck-row pickup.');
+    } else {
+      // Insert all items, ignoring already-seen rows (unique source_id).
+      // Returning '*' lets us know which rows are actually new.
+      const { data: inserted, error: insErr } = await supabase
+        .from('breaking_headlines')
+        .upsert(
+          items.map(it => ({
+            source_id: it.source_id,
+            source_name: it.source_name,
+            headline: it.headline,
+            source_url: it.source_url,
+            published_at: it.published_at,
+          })),
+          { onConflict: 'source_id', ignoreDuplicates: true },
+        )
+        .select('id, source_id, source_name, headline, source_url, published_at, impact_score');
+
+      if (insErr) {
+        console.error('Insert failed:', insErr.message);
+        process.exit(1);
+      }
+
+      // Only rows we haven't classified yet (impact_score IS NULL).
+      // upsert with ignoreDuplicates returns ONLY the actually-inserted rows.
+      newRows = (inserted ?? []).filter(r => r.impact_score === null);
+      console.log(`  ${newRows.length} new headlines to classify`);
+    }
+  } else {
+    console.log('Running in --stuck-only mode: skipping source fetch and classifier.');
+  }
+
+  // Stage 1: E.6 classifier on every new row (with cap). Skipped in --stuck-only.
+  for (const row of (stuckOnly ? [] : newRows).slice(0, MAX_CLASSIFIER_CALLS)) {
     try {
       const item: NewsItem = {
         source_id: row.source_id,

@@ -5,6 +5,10 @@ on:
     # Every 5 min during NY session (Mon–Fri 13:00–21:00 UTC = 09:00–17:00 ET).
     # 5 inputs needed for GH cron: minute hour day-of-month month day-of-week
     - cron: "*/5 13-21 * * 1-5"
+    # Weekend cleanup: one run each on Sat/Sun at 10:00 UTC (after Gemini's
+    # daily quota reset at ~08:00 UTC) to drain rows that got stuck when
+    # the Friday quota ran out.
+    - cron: "0 10 * * 0,6"
   workflow_dispatch:
 
 jobs:
@@ -21,7 +25,11 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - run: npm --workspace workers run poll-breaking
+      - name: Run poll-breaking
+        run: |
+          ARGS=""
+          if [ "${{ github.event.schedule }}" = "0 10 * * 0,6" ]; then ARGS="-- --stuck-only"; fi
+          npm --workspace workers run poll-breaking $ARGS
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
