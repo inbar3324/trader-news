@@ -24,5 +24,5 @@ jobs:
           GEMINI_KEY_WRITER: ${{ secrets.GEMINI_KEY_WRITER }}
           GEMINI_KEY_RESEARCHER: ${{ secrets.GEMINI_KEY_RESEARCHER }}
           GEMINI_KEY_3: ${{ secrets.GEMINI_KEY_3 }}
-          GEMINI_KEY_4: ${{ secrets.GEMINI_KEY_4 }}
-          GEMINI_KEY_5: ${{ secrets.GEMINI_KEY_5 }}
+          GEMINI_KEY_4: ${{ secrets.TRADERNEWSKEY4 }}
+          GEMINI_KEY_5: ${{ secrets.TRADERNEWSKEY5 }}
