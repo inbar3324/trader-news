@@ -50,6 +50,10 @@ function rangeToWindow(range: string | undefined, dayParam: string | undefined):
   const startOfToday = new Date(now);
   startOfToday.setUTCHours(0, 0, 0, 0);
 
+  // Sunday at-or-before today (US/ForexFactory calendar week convention).
+  const startOfThisWeek = new Date(startOfToday);
+  startOfThisWeek.setUTCDate(startOfThisWeek.getUTCDate() - startOfThisWeek.getUTCDay());
+
   if (range === "today") {
     const end = new Date(startOfToday);
     end.setUTCDate(end.getUTCDate() + 1);
@@ -62,8 +66,14 @@ function rangeToWindow(range: string | undefined, dayParam: string | undefined):
     end.setUTCDate(end.getUTCDate() + 1);
     return { from: start, to: end };
   }
+  if (range === "last") {
+    const start = new Date(startOfThisWeek);
+    start.setUTCDate(start.getUTCDate() - 7);
+    const end = new Date(startOfThisWeek);
+    return { from: start, to: end };
+  }
   if (range === "next") {
-    const start = new Date(startOfToday);
+    const start = new Date(startOfThisWeek);
     start.setUTCDate(start.getUTCDate() + 7);
     const end = new Date(start);
     end.setUTCDate(end.getUTCDate() + 7);
@@ -71,21 +81,22 @@ function rangeToWindow(range: string | undefined, dayParam: string | undefined):
   }
   if (range === "next2" || range === "next3" || range === "next4") {
     const weeks = range === "next2" ? 2 : range === "next3" ? 3 : 4;
-    const start = new Date(startOfToday);
+    const start = new Date(startOfThisWeek);
     start.setUTCDate(start.getUTCDate() + 7);
     const end = new Date(start);
     end.setUTCDate(end.getUTCDate() + 7 * weeks);
     return { from: start, to: end };
   }
   if (range === "month") {
-    const end = new Date(startOfToday);
+    const start = new Date(startOfThisWeek);
+    const end = new Date(start);
     end.setUTCDate(end.getUTCDate() + 28);
-    return { from: startOfToday, to: end };
+    return { from: start, to: end };
   }
-  // default: this week
-  const end = new Date(startOfToday);
+  // default: this week (Sunday → next Sunday)
+  const end = new Date(startOfThisWeek);
   end.setUTCDate(end.getUTCDate() + 7);
-  return { from: startOfToday, to: end };
+  return { from: startOfThisWeek, to: end };
 }
 
 function filterEvents(

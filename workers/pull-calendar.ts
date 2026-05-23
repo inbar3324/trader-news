@@ -7,8 +7,8 @@ import { getServiceClient } from "./lib/supabase.js";
 import { matchEventType, type EventTypeRow } from "./lib/event-type-matcher.js";
 
 async function main() {
-  console.log("[pull-calendar] fetching ForexFactory (this week + 3 future weeks)…");
-  const raw = await fetchFFWeeks([0, 1, 2, 3]);
+  console.log("[pull-calendar] fetching ForexFactory (last week + this week + 3 future weeks)…");
+  const raw = await fetchFFWeeks([-1, 0, 1, 2, 3]);
   const events = normalize(raw);
   console.log(`[pull-calendar] normalized ${events.length} events`);
 
@@ -60,12 +60,13 @@ async function main() {
   const idBySource = new Map(
     (upserted ?? []).map((r) => [`${r.source}:${r.source_ref}`, r.id as string]),
   );
-  const occRows: Array<{ event_id: string; forecast: number | null; previous: number | null }> = [];
+  const occRows: Array<{ event_id: string; actual: number | null; forecast: number | null; previous: number | null }> = [];
   for (let i = 0; i < rows.length; i++) {
     const id = idBySource.get(`${rows[i].source}:${rows[i].source_ref}`);
     if (!id) continue;
     occRows.push({
       event_id: id,
+      actual: events[i].actual,
       forecast: events[i].forecast,
       previous: events[i].previous,
     });

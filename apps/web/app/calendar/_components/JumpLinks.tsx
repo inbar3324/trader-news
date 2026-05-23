@@ -4,6 +4,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 const LINKS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "today", label: "Today" },
   { value: "tomorrow", label: "Tomorrow" },
+  { value: "last", label: "Last Week" },
   { value: "week", label: "This Week" },
   { value: "next", label: "Next Week" },
   { value: "next2", label: "Next 2 Weeks" },

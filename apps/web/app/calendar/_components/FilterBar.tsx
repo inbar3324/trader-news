@@ -10,6 +10,7 @@ const IMPACTS = [
 ] as const;
 const RANGES = [
   { value: "today", label: "Today" },
+  { value: "last", label: "Last week" },
   { value: "week", label: "This week" },
   { value: "next", label: "Next week" },
   { value: "next2", label: "+2 wks" },

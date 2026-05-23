@@ -24,22 +24,23 @@ function parseYmd(s: string): { y: number; m: number; d: number } | null {
 type Cell = { iso: string; day: number; inMonth: boolean };
 
 function buildMonthGrid(viewYear: number, viewMonth: number): Cell[] {
-  // viewMonth is 1-12
-  const first = new Date(Date.UTC(viewYear, viewMonth - 1, 1));
+  // viewMonth is 1-12. Anchor all dates at 12:00 UTC so the offset to NY
+  // (UTC-4/-5) never slips the calendar date during DST transitions.
+  const first = new Date(Date.UTC(viewYear, viewMonth - 1, 1, 12));
   const firstDow = first.getUTCDay(); // 0 = Sun
-  const daysInMonth = new Date(Date.UTC(viewYear, viewMonth, 0)).getUTCDate();
+  const daysInMonth = new Date(Date.UTC(viewYear, viewMonth, 0, 12)).getUTCDate();
   const cells: Cell[] = [];
 
   // leading days from previous month
-  const prevDaysInMonth = new Date(Date.UTC(viewYear, viewMonth - 1, 0)).getUTCDate();
+  const prevDaysInMonth = new Date(Date.UTC(viewYear, viewMonth - 1, 0, 12)).getUTCDate();
   for (let i = firstDow - 1; i >= 0; i--) {
     const day = prevDaysInMonth - i;
-    const date = new Date(Date.UTC(viewYear, viewMonth - 2, day));
+    const date = new Date(Date.UTC(viewYear, viewMonth - 2, day, 12));
     cells.push({ iso: ymdInNY(date), day, inMonth: false });
   }
   // current month
   for (let day = 1; day <= daysInMonth; day++) {
-    const date = new Date(Date.UTC(viewYear, viewMonth - 1, day));
+    const date = new Date(Date.UTC(viewYear, viewMonth - 1, day, 12));
     cells.push({ iso: ymdInNY(date), day, inMonth: true });
   }
   // trailing days to fill 6-week grid
@@ -47,7 +48,7 @@ function buildMonthGrid(viewYear: number, viewMonth: number): Cell[] {
     const last = cells[cells.length - 1];
     const lastP = parseYmd(last.iso);
     if (!lastP) break;
-    const nextDate = new Date(Date.UTC(lastP.y, lastP.m - 1, lastP.d + 1));
+    const nextDate = new Date(Date.UTC(lastP.y, lastP.m - 1, lastP.d + 1, 12));
     cells.push({
       iso: ymdInNY(nextDate),
       day: nextDate.getUTCDate(),
@@ -76,7 +77,7 @@ export function MiniCalendar() {
   if (!todayParts) return null;
 
   const monthLabel = new Date(
-    Date.UTC(todayParts.y, todayParts.m - 1, 1),
+    Date.UTC(todayParts.y, todayParts.m - 1, 1, 12),
   ).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: NY_TZ });
 
   function selectDay(iso: string) {
