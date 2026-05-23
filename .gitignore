@@ -22,6 +22,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+dev.log
+
+# local setup scripts (contain one-time runner registration tokens, machine-specific paths)
+scripts/
 
 # misc
 .DS_Store
