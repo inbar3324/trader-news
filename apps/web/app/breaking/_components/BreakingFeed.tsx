@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type { BreakingHeadline, BreakingSource } from "@/lib/types";
 import { FilterControls, type FilterMode } from "./FilterControls";
+import { CurrencyFilterBar, type CurrencyFilter } from "./CurrencyFilter";
+import { matchesCurrency } from "./currency-match";
 
 const SOURCE_LABEL: Record<BreakingSource, string> = {
   fed:   "Fed",
@@ -58,6 +60,7 @@ function mergeRows(prev: BreakingHeadline[], incoming: BreakingHeadline): Breaki
 export function BreakingFeed({ initial }: { initial: BreakingHeadline[] }) {
   const [rows, setRows] = useState<BreakingHeadline[]>(initial);
   const [mode, setMode] = useState<FilterMode>("impact5");
+  const [currency, setCurrency] = useState<CurrencyFilter>("all");
   const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
@@ -82,7 +85,8 @@ export function BreakingFeed({ initial }: { initial: BreakingHeadline[] }) {
   }, []);
 
   const visible = useMemo(() => {
-    const filtered = applyFilter(rows, mode);
+    let filtered = applyFilter(rows, mode);
+    if (currency !== "all") filtered = filtered.filter(r => matchesCurrency(r, currency));
     // sort: impact desc (nulls last), then published desc
     return filtered.sort((a, b) => {
       const ai = a.impact_score ?? -1;
@@ -90,10 +94,11 @@ export function BreakingFeed({ initial }: { initial: BreakingHeadline[] }) {
       if (ai !== bi) return bi - ai;
       return new Date(b.published_at).getTime() - new Date(a.published_at).getTime();
     });
-  }, [rows, mode]);
+  }, [rows, mode, currency]);
 
   return (
     <>
+      <CurrencyFilterBar value={currency} onChange={setCurrency} />
       <FilterControls mode={mode} onChange={setMode} total={rows.length} shown={visible.length} />
 
       <ul className="mt-3 divide-y divide-[var(--color-border)] rounded border border-[var(--color-border)] bg-[var(--color-surface)]">
