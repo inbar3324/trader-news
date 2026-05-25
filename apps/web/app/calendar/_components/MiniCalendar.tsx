@@ -1,6 +1,6 @@
 "use client";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const NY_TZ = "America/New_York";
 
@@ -65,8 +65,11 @@ export function MiniCalendar() {
   const pathname = usePathname();
   const params = useSearchParams();
 
-  const todayIso = useMemo(() => ymdInNY(new Date()), []);
-  const todayParts = useMemo(() => parseYmd(todayIso), [todayIso]);
+  const [todayIso, setTodayIso] = useState<string | null>(null);
+  useEffect(() => {
+    setTodayIso(ymdInNY(new Date()));
+  }, []);
+  const todayParts = useMemo(() => (todayIso ? parseYmd(todayIso) : null), [todayIso]);
 
   const selectedDay = params.get("d");
   const grid = useMemo(() => {
