@@ -98,7 +98,7 @@ export function CalendarTable({ events }: { events: CalendarEvent[] }) {
                     </td>
                     <td className="text-left">
                       <Link
-                        href={`/event/${e.event_type_slug ?? e.id}`}
+                        href={`/event/${e.id}`}
                         className="inline-block py-0.5 text-[var(--color-text)] hover:text-[var(--color-text-link)] hover:underline focus-visible:text-[var(--color-text-link)] focus-visible:underline"
                       >
                         {e.title}
