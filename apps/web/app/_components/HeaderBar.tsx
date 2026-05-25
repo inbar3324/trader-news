@@ -7,6 +7,7 @@ import { DensityToggle } from "./DensityToggle";
 import { ThemeToggle } from "./ThemeToggle";
 import { CommandPaletteTrigger } from "./CommandPaletteTrigger";
 import { CommandPalette } from "./CommandPalette";
+import { Logo } from "./Logo";
 
 const NAV_LINKS: ReadonlyArray<{ href: string; label: string }> = [
   { href: "/calendar", label: "Calendar" },
@@ -23,9 +24,10 @@ export function HeaderBar() {
         <div className="flex items-center gap-6">
           <Link
             href="/calendar"
-            className="flex items-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] rounded-sm"
+            aria-label="TraderNews home"
+            className="flex items-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] rounded-md"
           >
-            <span className="inline-block h-1.5 w-1.5 rounded-sm bg-[var(--color-accent)]" />
+            <Logo size={20} />
             <span className="text-[15px] font-semibold tracking-tight text-[var(--color-text)]">
               TraderNews
             </span>
