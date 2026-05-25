@@ -97,16 +97,12 @@ export function CalendarTable({ events }: { events: CalendarEvent[] }) {
                       <ImpactDot impact={e.impact} />
                     </td>
                     <td className="text-left">
-                      {e.event_type_slug ? (
-                        <Link
-                          href={`/event/${e.event_type_slug}`}
-                          className="inline-block py-0.5 text-[var(--color-text)] hover:text-[var(--color-text-link)] hover:underline focus-visible:text-[var(--color-text-link)] focus-visible:underline"
-                        >
-                          {e.title}
-                        </Link>
-                      ) : (
-                        <span className="text-[var(--color-text)]">{e.title}</span>
-                      )}
+                      <Link
+                        href={`/event/${e.event_type_slug ?? e.id}`}
+                        className="inline-block py-0.5 text-[var(--color-text)] hover:text-[var(--color-text-link)] hover:underline focus-visible:text-[var(--color-text-link)] focus-visible:underline"
+                      >
+                        {e.title}
+                      </Link>
                     </td>
                     <td className={`text-right ${deltaClass(delta)}`}>
                       {e.actual !== null ? (

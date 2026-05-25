@@ -15,7 +15,7 @@ type Params = Promise<{ slug: string }>;
 
 interface EventData {
   id: string;
-  event_type_id: string;
+  event_type_id: string | null;
   title: string;
   release_at: string;
   impact: string;
@@ -25,7 +25,9 @@ interface EventData {
   previous: number | null;
 }
 
-async function fetchEventData(slug: string): Promise<{
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function fetchEventData(slugOrId: string): Promise<{
   event: EventData;
   reactions: HistoricalReaction[];
   symbols: Symbol[];
@@ -37,7 +39,9 @@ async function fetchEventData(slug: string): Promise<{
 
   if (!supabase) {
     // Mock fallback
-    const mock = MOCK_EVENTS.find((e) => e.event_type_slug === slug);
+    const mock = MOCK_EVENTS.find(
+      (e) => e.event_type_slug === slugOrId || e.id === slugOrId,
+    );
     if (!mock) return null;
     return {
       event: { ...mock, event_type_id: mock.event_type_id ?? "" },
@@ -49,18 +53,26 @@ async function fetchEventData(slug: string): Promise<{
     };
   }
 
-  // Fetch event + occurrences via event_type slug
-  const { data: evData, error: evErr } = await supabase
-    .from("events")
-    .select(`
+  // Lookup by event id (unmatched events) or by event_type slug.
+  const isUuid = UUID_RE.test(slugOrId);
+  const baseSelect = `
       id, event_type_id, title, release_at, impact, currency,
-      event_types!inner( slug ),
       event_occurrences( actual, forecast, previous )
-    `)
-    .eq("event_types.slug", slug)
-    .order("release_at", { ascending: false })
-    .limit(1)
-    .single();
+    `;
+  const { data: evData, error: evErr } = isUuid
+    ? await supabase
+        .from("events")
+        .select(baseSelect)
+        .eq("id", slugOrId)
+        .limit(1)
+        .single()
+    : await supabase
+        .from("events")
+        .select(`${baseSelect}, event_types!inner( slug )`)
+        .eq("event_types.slug", slugOrId)
+        .order("release_at", { ascending: false })
+        .limit(1)
+        .single();
 
   if (evErr || !evData) return null;
 
@@ -69,7 +81,7 @@ async function fetchEventData(slug: string): Promise<{
     : (evData.event_occurrences as { actual: number | null; forecast: number | null; previous: number | null } | null);
   const event: EventData = {
     id: evData.id as string,
-    event_type_id: evData.event_type_id as string,
+    event_type_id: (evData.event_type_id ?? null) as string | null,
     title: evData.title as string,
     release_at: evData.release_at as string,
     impact: evData.impact as string,
@@ -79,11 +91,13 @@ async function fetchEventData(slug: string): Promise<{
     previous: occ?.previous ?? null,
   };
 
-  // Fetch historical reactions for this event_type
-  const { data: rxData } = await supabase
-    .from("historical_reactions")
-    .select("*")
-    .eq("event_type_id", event.event_type_id);
+  // Fetch historical reactions for this event_type (skip if event isn't matched to a type)
+  const { data: rxData } = event.event_type_id
+    ? await supabase
+        .from("historical_reactions")
+        .select("*")
+        .eq("event_type_id", event.event_type_id)
+    : { data: [] };
 
   const reactions = (rxData ?? []) as HistoricalReaction[];
 
