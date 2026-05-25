@@ -2,8 +2,8 @@
 
 on:
   schedule:
-    # Saturday 04:00 UTC â€” captures the week's events before 30-day yfinance window expires
-    - cron: "0 4 * * 6"
+    # Daily 04:00 UTC â€” catches new occurrences within 1 day so n=3 threshold is reached fast
+    - cron: "0 4 * * *"
   workflow_dispatch:
 
 jobs:
