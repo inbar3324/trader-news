@@ -2,9 +2,12 @@ name: poll-breaking
 
 on:
   schedule:
-    # Every 5 min during NY session (Mon–Fri 13:00–21:00 UTC = 09:00–17:00 ET).
+    # Every 5 min during the NY morning data window: 08:30–11:00 ET = 12:30–15:00 UTC
+    # (EDT/summer offset; GH cron is fixed UTC and can't follow DST — see note below).
     # 5 inputs needed for GH cron: minute hour day-of-month month day-of-week
-    - cron: "*/5 13-21 * * 1-5"
+    - cron: "30,35,40,45,50,55 12 * * 1-5"   # 12:30–12:55 UTC (08:30–08:55 ET)
+    - cron: "*/5 13-14 * * 1-5"              # 13:00–14:55 UTC (09:00–10:55 ET)
+    - cron: "0 15 * * 1-5"                   # 15:00 UTC (11:00 ET) closing tick
     # Stuck-row safety net: every hour at :30, Mon–Sat (Sunday skipped — no
     # US trading). Runs --stuck-only so no source fetch / no classifier —
     # only drains the Stage 2 backlog. Cheap when there's nothing stuck
@@ -29,9 +32,9 @@ jobs:
       - name: Run poll-breaking
         run: |
           ARGS=""
-          # Full pipeline only for the weekday-session cron and manual triggers.
-          # Every other schedule (the hourly safety-net) runs --stuck-only.
-          if [ -n "${{ github.event.schedule }}" ] && [ "${{ github.event.schedule }}" != "*/5 13-21 * * 1-5" ]; then
+          # Full pipeline for the three morning-window crons and manual triggers.
+          # Only the hourly safety-net cron runs --stuck-only.
+          if [ "${{ github.event.schedule }}" = "30 * * * 1-6" ]; then
             ARGS="-- --stuck-only"
           fi
           npm --workspace workers run poll-breaking $ARGS

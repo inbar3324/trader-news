@@ -26,7 +26,7 @@ export default async function BreakingPage() {
       <header className="border-b border-[var(--color-border)] pb-4">
         <h1 className="text-xl font-semibold tracking-tight">Breaking news</h1>
         <p className="mt-1 text-[12px] text-[var(--color-text-dim)]">
-          Federal Reserve · ECB · WSJ · Yahoo Finance. Polled every 5 minutes during the NY session.
+          Federal Reserve · ECB · WSJ · Yahoo Finance. Polled every 5 minutes during the NY morning data window (8:30–11:00 ET).
           AI-verified summaries on high-impact headlines.
         </p>
       </header>
